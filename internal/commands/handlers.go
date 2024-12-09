@@ -145,22 +145,39 @@ func handlerAddFeed(s *state.State, cmd Command) error {
 	}
 
 	fmt.Printf("Feed ID: %s\n", feed.ID)
-	fmt.Printf("Created at: %s", feed.CreatedAt)
-	fmt.Printf("Updated at; %s", feed.UpdatedAt)
-	fmt.Printf("Feed name: %s", feed.Name)
-	fmt.Printf("URL: %s", feed.Url)
-	fmt.Printf("UserID: %s", s.Cfg.CurrentUserID)
+	fmt.Printf("Created at: %s\n", feed.CreatedAt)
+	fmt.Printf("Updated at; %s\n", feed.UpdatedAt)
+	fmt.Printf("Feed name: %s\n", feed.Name)
+	fmt.Printf("URL: %s\n", feed.Url)
+	fmt.Printf("UserID: %s\n", s.Cfg.CurrentUserID)
 
 	return nil
 }
 
-/*
-type Feed struct {
-	ID        uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Name      string
-	Url       string
-	UserID    uuid.UUID
+func handlerFeeds(s *state.State, cmd Command) error {
+	if len(cmd.Args) != 0 {
+		return fmt.Errorf("usage: gator feeds")
+	}
+
+	feeds, errFeeds := s.Db.GetFeeds(context.Background())
+	if errFeeds != nil {
+		return fmt.Errorf("error while retrieving feeds from database: %v", errFeeds)
+	}
+
+	for _, feed := range(feeds) {
+		user, errUser := s.Db.GetuserFromID(context.Background(), feed.UserID)
+		if errUser != nil {
+			return fmt.Errorf("error while retrieving username from database; %v", errUser)
+		}
+		
+		fmt.Printf("Feed ID: %s\n", feed.ID)
+		fmt.Printf("Created at: %s\n", feed.CreatedAt)
+		fmt.Printf("Updated at; %s\n", feed.UpdatedAt)
+		fmt.Printf("Feed name: %s\n", feed.Name)
+		fmt.Printf("URL: %s\n", feed.Url)
+		fmt.Printf("UserID: %s\n", feed.UserID)
+		fmt.Printf("Author name: %s\n", user.Name)
+	}
+
+	return nil
 }
-*/

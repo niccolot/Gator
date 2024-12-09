@@ -17,3 +17,7 @@ SELECT * FROM users;
 
 -- name: Reset :exec
 DELETE FROM users;
+
+-- name: GetuserFromID :one
+SELECT * FROM users
+WHERE id = $1;
