@@ -44,4 +44,6 @@ func (c *Commands) Init() {
 	c.RegisterCmd("agg", handlerAgg)
 	c.RegisterCmd("addfeed", handlerAddFeed)
 	c.RegisterCmd("feeds", handlerFeeds)
+	c.RegisterCmd("follow", handlerFollow)
+	c.RegisterCmd("following", handlerFollowing)
 }

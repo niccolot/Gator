@@ -8,16 +8,18 @@ VALUES (
 )
 RETURNING *;
 
--- name: GetUser :one
-SELECT * FROM users 
-WHERE name = $1;
+CREATE INDEX idx_users_name ON users(name);
 
 -- name: GetUsers :many
 SELECT * FROM users;
 
--- name: Reset :exec
-DELETE FROM users;
+-- name: GetUser :one
+SELECT * FROM users 
+WHERE name = $1;
 
 -- name: GetuserFromID :one
 SELECT * FROM users
 WHERE id = $1;
+
+-- name: Reset :exec
+DELETE FROM users;

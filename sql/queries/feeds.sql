@@ -10,5 +10,15 @@ VALUES (
 )
 RETURNING *;
 
+CREATE INDEX idx_feeds_url ON feeds(url);
+
 -- name: GetFeeds :many
 SELECT * FROM feeds;
+
+-- name: GetFeedFromID :one
+SELECT * FROM feeds
+WHERE id = $1;
+
+-- name: GetFeedFromURL :one
+SELECT * FROM feeds 
+WHERE url = $1;

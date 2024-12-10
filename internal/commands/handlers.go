@@ -130,10 +130,13 @@ func handlerAddFeed(s *state.State, cmd Command) error {
 		return fmt.Errorf("usage: gator <feed name> <feed url>")
 	}
 
+	currTime := time.Now()
+	newFeedID := uuid.New()
+
 	feedPars := &database.CreateFeedParams{
-		ID: uuid.New(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID: newFeedID,
+		CreatedAt: currTime,
+		UpdatedAt: currTime,
 		Name: cmd.Args[0],
 		Url: cmd.Args[1],
 		UserID: s.Cfg.CurrentUserID,
@@ -142,6 +145,19 @@ func handlerAddFeed(s *state.State, cmd Command) error {
 	feed, errFeed := s.Db.CreateFeed(context.Background(), *feedPars)
 	if errFeed != nil {
 		return fmt.Errorf("error while creating feed in database: %v", errFeed)
+	}
+
+	feedFollowsPars := &database.CreateFeedFollowParams{
+		ID: uuid.New(),
+		CreatedAt: currTime,
+		UpdatedAt: currTime,
+		UserID: s.Cfg.CurrentUserID,
+		FeedID: newFeedID,
+	}
+
+	_, errFeedFollows := s.Db.CreateFeedFollow(context.Background(), *feedFollowsPars)
+	if errFeedFollows != nil {
+		return fmt.Errorf("error while updating following list: %v", errFeedFollows)
 	}
 
 	fmt.Printf("Feed ID: %s\n", feed.ID)
@@ -177,6 +193,57 @@ func handlerFeeds(s *state.State, cmd Command) error {
 		fmt.Printf("URL: %s\n", feed.Url)
 		fmt.Printf("UserID: %s\n", feed.UserID)
 		fmt.Printf("Author name: %s\n", user.Name)
+	}
+
+	return nil
+}
+
+func handlerFollow(s *state.State, cmd Command) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: gator follow <feed url>")
+	}
+
+	currUserID := s.Cfg.CurrentUserID
+	feed, errFeed := s.Db.GetFeedFromURL(context.Background(), cmd.Args[0])
+	if errFeed != nil {
+		return fmt.Errorf("error while retrieving feed from database; %v", errFeed)
+	}
+
+	feedFollowPars := &database.CreateFeedFollowParams{
+		ID: uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID: currUserID,
+		FeedID: feed.ID,
+	}
+
+	_, errFeedFollow := s.Db.CreateFeedFollow(context.Background(), *feedFollowPars)
+	if errFeedFollow != nil {
+		return fmt.Errorf("error while following feed: %v", errFeedFollow)
+	}
+
+	fmt.Printf("Followed feed name: %s\n", feed.Name)
+	fmt.Printf("Current user: %s\n", s.Cfg.CurrentUserName)
+
+	return nil
+}
+
+func handlerFollowing(s *state.State, cmd Command) error {
+	if len(cmd.Args) != 0 {
+		return fmt.Errorf("usage: gator following")
+	}
+	
+	following, errFollowing := s.Db.GetFeedFollowsForUser(context.Background(), s.Cfg.CurrentUserID)
+	if errFollowing != nil {
+		return fmt.Errorf("error while retrieving followed feeds from database: %v", errFollowing)
+	}
+
+	for _, feedFollow := range(following) {
+		feed, errFeed := s.Db.GetFeedFromID(context.Background(), feedFollow.FeedID)
+		if errFeed != nil {
+			return fmt.Errorf("error while retrieving followed feeds details: %v", errFeed)
+		}
+		fmt.Println(feed.Name)
 	}
 
 	return nil
