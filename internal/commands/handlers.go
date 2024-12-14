@@ -3,13 +3,27 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/niccolot/BlogAggregator/internal/database"
-	"github.com/niccolot/BlogAggregator/internal/state"
 	"github.com/niccolot/BlogAggregator/internal/rss"
+	"github.com/niccolot/BlogAggregator/internal/state"
 )
+
+func middlewareLoggedIn(
+	handler func(s *state.State, cmd Command, user *database.User) error) func(s *state.State, cmd Command) error {
+
+	return func(s *state.State, cmd Command) error {
+		user, err := s.Db.GetUser(context.Background(), s.Cfg.CurrentUserName)
+		if err != nil {
+			return err
+		}
+
+		return handler(s,cmd,&user)
+	}
+}
 
 func handlerLogin(s *state.State, cmd Command) error {
 	if len(cmd.Args) == 0 {
@@ -41,11 +55,6 @@ func handlerRegister(s *state.State, cmd Command) error {
 	}	
 
 	name := cmd.Args[0]
-	
-	tempName, _ := s.Db.GetUser(context.Background(), name)
-	if tempName.Name == name {
-		return fmt.Errorf("user already registered")
-	}
 	
 	pars := database.CreateUserParams{
 		ID: uuid.New(),
@@ -87,27 +96,23 @@ func handlerGetUsers(s *state.State, cmd Command) error {
 }
 
 func handlerAgg(s *state.State, cmd Command) error {
-	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: gator agg")
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: gator agg <time between requests>")
 	}
 
-	feed, errFeed := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-	if errFeed != nil {
-		return fmt.Errorf("error while getting feed: %v", errFeed)
+	timeBetweenReqs, errParse := time.ParseDuration(cmd.Args[0])
+	if errParse != nil {
+		return fmt.Errorf("error while parsing fetching frequency: %v", errParse)
 	}
 
-	fmt.Println(feed.Channel.Title)
-	fmt.Println(feed.Channel.Link)
-	fmt.Println(feed.Channel.Description)
-	
-	for _, item := range feed.Channel.Item {
-		fmt.Println(item.Title)
-		fmt.Println(item.Link)
-		fmt.Println(item.Description)
-		fmt.Println(item.PubDate)
+	fmt.Printf("Collecting feeds every %s...", timeBetweenReqs)
+	ticker := time.NewTicker(timeBetweenReqs)
+	for ; ; <-ticker.C {
+		errScrape := rss.ScrapeFeeds(s, context.Background())
+		if errScrape != nil {
+			return fmt.Errorf("error while fetching feed: %v", errScrape)
+		}
 	}
-
-	return nil
 }
 
 func handlerReset(s *state.State, cmd Command) error {
@@ -125,7 +130,7 @@ func handlerReset(s *state.State, cmd Command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state.State, cmd Command) error {
+func handlerAddFeed(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 2 {
 		return fmt.Errorf("usage: gator <feed name> <feed url>")
 	}
@@ -139,7 +144,7 @@ func handlerAddFeed(s *state.State, cmd Command) error {
 		UpdatedAt: currTime,
 		Name: cmd.Args[0],
 		Url: cmd.Args[1],
-		UserID: s.Cfg.CurrentUserID,
+		UserID: user.ID,
 	}
 
 	feed, errFeed := s.Db.CreateFeed(context.Background(), *feedPars)
@@ -151,7 +156,7 @@ func handlerAddFeed(s *state.State, cmd Command) error {
 		ID: uuid.New(),
 		CreatedAt: currTime,
 		UpdatedAt: currTime,
-		UserID: s.Cfg.CurrentUserID,
+		UserID: user.ID,
 		FeedID: newFeedID,
 	}
 
@@ -165,7 +170,7 @@ func handlerAddFeed(s *state.State, cmd Command) error {
 	fmt.Printf("Updated at; %s\n", feed.UpdatedAt)
 	fmt.Printf("Feed name: %s\n", feed.Name)
 	fmt.Printf("URL: %s\n", feed.Url)
-	fmt.Printf("UserID: %s\n", s.Cfg.CurrentUserID)
+	fmt.Printf("UserID: %s\n", user.ID)
 
 	return nil
 }
@@ -198,12 +203,12 @@ func handlerFeeds(s *state.State, cmd Command) error {
 	return nil
 }
 
-func handlerFollow(s *state.State, cmd Command) error {
+func handlerFollow(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 1 {
 		return fmt.Errorf("usage: gator follow <feed url>")
 	}
 
-	currUserID := s.Cfg.CurrentUserID
+	currUserID := user.ID
 	feed, errFeed := s.Db.GetFeedFromURL(context.Background(), cmd.Args[0])
 	if errFeed != nil {
 		return fmt.Errorf("error while retrieving feed from database; %v", errFeed)
@@ -223,17 +228,17 @@ func handlerFollow(s *state.State, cmd Command) error {
 	}
 
 	fmt.Printf("Followed feed name: %s\n", feed.Name)
-	fmt.Printf("Current user: %s\n", s.Cfg.CurrentUserName)
+	fmt.Printf("Current user: %s\n", user.Name)
 
 	return nil
 }
 
-func handlerFollowing(s *state.State, cmd Command) error {
+func handlerFollowing(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 0 {
 		return fmt.Errorf("usage: gator following")
 	}
 	
-	following, errFollowing := s.Db.GetFeedFollowsForUser(context.Background(), s.Cfg.CurrentUserID)
+	following, errFollowing := s.Db.GetFeedFollowsForUser(context.Background(), user.ID)
 	if errFollowing != nil {
 		return fmt.Errorf("error while retrieving followed feeds from database: %v", errFollowing)
 	}
@@ -244,6 +249,61 @@ func handlerFollowing(s *state.State, cmd Command) error {
 			return fmt.Errorf("error while retrieving followed feeds details: %v", errFeed)
 		}
 		fmt.Println(feed.Name)
+	}
+
+	return nil
+}
+
+func handlerUnfollow(s *state.State, cmd Command, user *database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: gator unfollow <feed url>")
+	}
+
+	currUserID := user.ID
+	unfollowPars := &database.UnfollowParams{
+		UserID: currUserID,
+		Url: cmd.Args[0],
+	}
+
+	errUnfollow := s.Db.Unfollow(context.Background(), *unfollowPars)
+	if errUnfollow != nil {
+		return fmt.Errorf("error while removing feed from following list: %v", errUnfollow)
+	}
+
+	return nil
+}
+
+func handlerBrowse(s *state.State, cmd Command, user *database.User) error {
+	if len(cmd.Args) > 1 {
+		return fmt.Errorf("usage: gator browse [optional] <limit>")
+	}
+
+	var limitStr string;
+	if len(cmd.Args) == 0 {
+		limitStr = "2" // 2 posts as default limit
+	} else {
+		limitStr = cmd.Args[0]
+	}
+
+	limit, errConv := strconv.ParseInt(limitStr, 10, 32)
+	if errConv != nil {
+		return fmt.Errorf("failed to parse limit value: %v", errConv)
+	}
+
+	getPostsPars := &database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit: int32(limit), // ParseInt is bugged and always returns int64 regardless of the choice
+	}
+
+	posts, errPosts := s.Db.GetPostsForUser(context.Background(), *getPostsPars)
+	if errPosts != nil {
+		return fmt.Errorf("failed to get posts from database: %v", errPosts)
+	}
+
+	for _, post := range(posts) {
+		fmt.Println()
+		fmt.Println(post.Title.String)
+		fmt.Println(post.Description.String)
 	}
 
 	return nil

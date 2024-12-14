@@ -42,8 +42,10 @@ func (c *Commands) Init() {
 	c.RegisterCmd("reset", handlerReset)
 	c.RegisterCmd("users", handlerGetUsers)
 	c.RegisterCmd("agg", handlerAgg)
-	c.RegisterCmd("addfeed", handlerAddFeed)
+	c.RegisterCmd("addfeed", middlewareLoggedIn(handlerAddFeed))
 	c.RegisterCmd("feeds", handlerFeeds)
-	c.RegisterCmd("follow", handlerFollow)
-	c.RegisterCmd("following", handlerFollowing)
+	c.RegisterCmd("follow", middlewareLoggedIn(handlerFollow))
+	c.RegisterCmd("following", middlewareLoggedIn(handlerFollowing))
+	c.RegisterCmd("unfollow", middlewareLoggedIn(handlerUnfollow))
+	c.RegisterCmd("browse", middlewareLoggedIn(handlerBrowse))
 }

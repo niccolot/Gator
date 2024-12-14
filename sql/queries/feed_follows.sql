@@ -25,6 +25,17 @@ INNER JOIN users ON users.id = inserted_feed_follows.user_id;
 
 CREATE INDEX idx_feed_follows_user_id ON feed_follows(user_id);
 
+CREATE INDEX idx_user_id_feed_id ON feed_follows (user_id, feed_id);
+
 -- name: GetFeedFollowsForUser :many
 SELECT * from feed_follows
 WHERE user_id = $1;
+
+-- name: Unfollow :exec
+DELETE FROM feed_follows
+WHERE feed_follows.user_id = $1
+AND feed_id = (
+    SELECT id
+    FROM feeds
+    WHERE url = $2
+);

@@ -8,9 +8,9 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/niccolot/BlogAggregator/internal/commands"
 	"github.com/niccolot/BlogAggregator/internal/config"
 	"github.com/niccolot/BlogAggregator/internal/database"
-	"github.com/niccolot/BlogAggregator/internal/commands"
 	"github.com/niccolot/BlogAggregator/internal/state"
 )
 
