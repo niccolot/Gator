@@ -35,6 +35,7 @@ SELECT
     posts.title,
     posts.url,
     posts.published_at,
+    posts.description,
     users_posts.name AS feed_name
 FROM posts
 INNER JOIN users_posts ON users_posts.feed_id = posts.feed_id

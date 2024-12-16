@@ -302,8 +302,11 @@ func handlerBrowse(s *state.State, cmd Command, user *database.User) error {
 
 	for _, post := range(posts) {
 		fmt.Println()
+		fmt.Println("Feed: ", post.FeedName)
 		fmt.Println(post.Title.String)
-		fmt.Println(post.Description.String)
+		if len(post.Description.String) != 0 {
+			fmt.Println(post.Description.String)
+		}
 	}
 
 	return nil

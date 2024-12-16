@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/xml"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,9 +61,14 @@ func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 }
 
 func ScrapeFeeds(s *state.State, ctx context.Context) error {
-	feedToFetch, errFeed := s.Db.GetNextFeedToFetch(ctx)
-	if errFeed != nil {
-		return errFeed
+	feedToFetch, err := s.Db.GetNextFeedToFetch(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get next feed to fetch: %w", err)
+	}
+
+	feed, err := FetchFeed(ctx, feedToFetch.Url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch feed '%s': %v", feedToFetch.Url, err)
 	}
 
 	// sql (possibly) null TIMESTAMP wants this kind of time object
@@ -74,20 +82,15 @@ func ScrapeFeeds(s *state.State, ctx context.Context) error {
 		LastFetchedAt: nullableTime,
 	}
 
-	errMark := s.Db.MarkFeedFetched(ctx, *fetchedPars)
-	if errMark != nil {
-		return errMark
+	err = s.Db.MarkFeedFetched(ctx, *fetchedPars)
+	if err != nil {
+		return err
 	}	
 
-	feed, errFetching := FetchFeed(ctx, feedToFetch.Url)
-	if errFetching != nil {
-		return errFetching
-	}
-
 	for _, item := range(feed.Channel.Item) {
-		pubTime, errPubtime := time.Parse(time.RFC1123, item.PubDate)
-		if errPubtime != nil {
-			return errPubtime
+		pubTime, errTime := parseTime(item.PubDate)
+		if errTime != nil {
+			log.Printf("Warning: couldn't parse time for post '%s': %v", item.Title, errTime)
 		}
 
 		nullableTitle := sql.NullString{
@@ -99,11 +102,8 @@ func ScrapeFeeds(s *state.State, ctx context.Context) error {
 			Time: pubTime,
 			Valid: true,
 		}
-
-		nullableDescription := sql.NullString{
-			String: item.Description,
-			Valid: true,
-		}
+		
+		nullableDescription := getDescription(&item)
 
 		postPars := &database.CreatePostParams{
 			ID: uuid.New(),
@@ -111,16 +111,58 @@ func ScrapeFeeds(s *state.State, ctx context.Context) error {
 			UpdatedAt: nullableTime.Time,
 			Title: nullableTitle,
 			Url: item.Link,
-			Description: nullableDescription,
+			Description: *nullableDescription,
 			PublishedAt: nullPubTime,
 			FeedID: feedToFetch.ID,
 		}
 
 		_, errPost := s.Db.CreatePost(ctx, *postPars)
 		if errPost != nil {
-			return errPost
+			log.Printf("Warning: failed to save post '%s' in database: %v", 
+				nullableTitle.String, errPost)
 		}
 	}
 
-	return nil
+	return err
+}
+
+func getDescription(item *RSSItem) *sql.NullString {
+	/*
+	some blogs does not have a proper 'description' rss field
+	but contains just some html, these cases are discarded
+	*/
+	var nullableDescription sql.NullString
+	hasLeftHTML := strings.Contains(item.Description, "<")
+	hasRightHTML := strings.Contains(item.Description, ">")
+	hasHTML := hasLeftHTML && hasRightHTML
+
+	if !hasHTML {
+		nullableDescription = sql.NullString{
+			String: item.Description,
+			Valid: true,
+		}
+	} else {
+		nullableDescription = sql.NullString{Valid: false}
+	}
+
+	return &nullableDescription
+}
+
+func parseTime(timeStr string) (time.Time, error) {
+	formats := []string{
+		time.RFC1123,
+		time.RFC1123Z,
+		time.RFC3339,
+		time.RFC822,
+		time.RFC822Z,
+		// add more formats as needed
+	}
+
+	for _, format := range(formats) {
+		if t, errTime := time.Parse(format, timeStr); errTime == nil {
+			return t, errTime
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse time: %s", timeStr)
 }

@@ -73,12 +73,21 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 
 const getPostsForUser = `-- name: GetPostsForUser :many
 WITH users_posts AS (
-    SELECT feed_id FROM feed_follows
+    SELECT feed_follows.feed_id,
+            feeds.name 
+    FROM feed_follows 
+    INNER JOIN feeds ON feed_follows.feed_id = feeds.id 
     WHERE feed_follows.user_id = $1
 )
-SELECT id, created_at, updated_at, title, url, description, published_at, posts.feed_id, users_posts.feed_id FROM posts
+SELECT 
+    posts.title,
+    posts.url,
+    posts.published_at,
+    posts.description,
+    users_posts.name AS feed_name
+FROM posts
 INNER JOIN users_posts ON users_posts.feed_id = posts.feed_id
-ORDER BY posts.updated_at DESC
+ORDER BY COALESCE(posts.created_at, posts.updated_at) DESC
 LIMIT $2
 `
 
@@ -88,15 +97,11 @@ type GetPostsForUserParams struct {
 }
 
 type GetPostsForUserRow struct {
-	ID          uuid.UUID
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
 	Title       sql.NullString
 	Url         string
-	Description sql.NullString
 	PublishedAt sql.NullTime
-	FeedID      uuid.UUID
-	FeedID_2    uuid.UUID
+	Description sql.NullString
+	FeedName    string
 }
 
 func (q *Queries) GetPostsForUser(ctx context.Context, arg GetPostsForUserParams) ([]GetPostsForUserRow, error) {
@@ -109,15 +114,11 @@ func (q *Queries) GetPostsForUser(ctx context.Context, arg GetPostsForUserParams
 	for rows.Next() {
 		var i GetPostsForUserRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.Title,
 			&i.Url,
-			&i.Description,
 			&i.PublishedAt,
-			&i.FeedID,
-			&i.FeedID_2,
+			&i.Description,
+			&i.FeedName,
 		); err != nil {
 			return nil, err
 		}
