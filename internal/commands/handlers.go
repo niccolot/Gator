@@ -3,7 +3,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,6 +33,10 @@ func handlerLogin(s *state.State, cmd Command) error {
 	}
 
 	name := cmd.Args[0]
+
+	if name == s.Cfg.CurrentUserName {
+		return fmt.Errorf("user '%s' already logged in", name)
+	}
 
 	user, _ := s.Db.GetUser(context.Background(), name)
 	if user.Name != name {
@@ -61,6 +67,11 @@ func handlerRegister(s *state.State, cmd Command) error {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Name: name,
+	}
+
+	_, errTemp := s.Db.GetUser(context.Background(), name)
+	if errTemp == nil {
+		return fmt.Errorf("user '%s' already registered", name)
 	}
 
 	newUser, errRegister := s.Db.CreateUser(context.Background(), pars)
@@ -94,10 +105,11 @@ func handlerGetUsers(s *state.State, cmd Command) error {
 
 	return nil
 }
-
+/*
 func handlerAgg(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 1 {
-		return fmt.Errorf("usage: gator agg <time between requests>")
+		log.Printf("usage: gator agg <time between requests>")
+		return nil
 	}
 
 	timeBetweenReqs, errParse := time.ParseDuration(cmd.Args[0])
@@ -105,14 +117,158 @@ func handlerAgg(s *state.State, cmd Command) error {
 		return fmt.Errorf("error while parsing fetching frequency: %v", errParse)
 	}
 
-	fmt.Printf("Collecting feeds every %s...", timeBetweenReqs)
-	ticker := time.NewTicker(timeBetweenReqs)
-	for ; ; <-ticker.C {
-		errScrape := rss.ScrapeFeeds(s, context.Background())
-		if errScrape != nil {
-			return fmt.Errorf("error while fetching feed: %v", errScrape)
-		}
+	if timeBetweenReqs < time.Second {
+		timeBetweenReqs = time.Second
+		log.Println("Warning: time between request selected is too small, set to default 1s")
 	}
+
+	fmt.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
+
+	batchSize := int32(10)
+	workers := 5
+
+	wg := sync.WaitGroup{}
+	//feedQueue := make([]database.Feed, batchSize)
+	feedQueue, errScrape := rss.ScrapeFeeds(s, context.Background(), batchSize)
+	if errScrape != nil {
+		log.Printf("Warning: error retrieving feeds: %v" ,errScrape)
+		return errScrape
+	}
+	
+	queueMux := sync.Mutex{}
+
+	for i := 0; i<workers; i++ {
+		wg.Add(1)
+		go func(worderID int) {
+			defer wg.Done()
+			for {
+				queueMux.Lock()
+				var feed database.Feed
+				if len(feedQueue) > 0 {
+					feed = feedQueue[0]
+					feedQueue = feedQueue[1:]
+				}
+				queueMux.Unlock()
+
+				// no more feeds in the queue
+				if feed.ID.String() == "" {
+					break
+				}
+
+				ctxWithTimeout, cancel := context.WithTimeout(context.Background(), timeBetweenReqs)
+				defer cancel()
+
+				startTime := time.Now()
+				err := rss.FetchAndStoreFeed(s, &feed, ctxWithTimeout)
+
+				if err != nil {
+					log.Printf("[Worker %d] Timeout or failed to fetch feed '%s': %v", worderID, feed.Url, err)
+				} else {
+					log.Printf("[Worker %d] Succesfully fetched feed '%s' in %v", worderID, feed.Url, time.Since(startTime))
+				}
+			}
+		}(i)
+	}
+
+	ticker := time.NewTicker(timeBetweenReqs)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		feeds, errScrape := rss.ScrapeFeeds(s, context.Background(), batchSize)
+		if errScrape != nil {
+			log.Printf("Warning: error retrieving feeds: %v" ,errScrape)
+			continue
+		}
+
+		queueMux.Lock()
+		feedQueue = append(feedQueue, feeds...)
+		queueMux.Unlock()
+
+		wg.Wait()
+		wg.Add(workers)
+
+	}
+
+	return nil
+}
+*/
+func handlerAgg(s *state.State, cmd Command) error {
+	if len(cmd.Args) != 1 {
+		log.Printf("usage: gator agg <time between requests>")
+		return nil
+	}
+
+	timeBetweenReqs, errParse := time.ParseDuration(cmd.Args[0])
+	if errParse != nil {
+		return fmt.Errorf("error while parsing fetching frequency: %v", errParse)
+	}
+
+	if timeBetweenReqs < time.Second {
+		timeBetweenReqs = time.Second
+		log.Println("Warning: time between request selected is too small, set to default 1s")
+	}
+
+	fmt.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
+
+	batchSize := int32(2)
+	workers := 2
+	wg := sync.WaitGroup{}	
+	queueMux := sync.Mutex{}
+
+	ticker := time.NewTicker(timeBetweenReqs)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		feedQueue, errScrape := rss.ScrapeFeeds(s, context.Background(), batchSize)
+		fmt.Println(len(feedQueue))
+		if errScrape != nil {
+			log.Printf("Warning: error retrieving feeds: %v" ,errScrape)
+			continue
+		}
+
+		for i := 0; i<workers; i++ {
+			wg.Add(1)
+			go func(workerID int) {
+				defer wg.Done()
+				for {
+					queueMux.Lock()
+					var feed database.Feed
+					if len(feedQueue) > 0 {
+						feed = feedQueue[0]
+						feedQueue = feedQueue[1:]
+					}
+					queueMux.Unlock()
+	
+					// no more feeds in the queue
+					if feed.ID.String() == "" {
+						return
+					}
+	
+					ctxWithTimeout, cancel := context.WithTimeout(context.Background(), timeBetweenReqs)
+					defer cancel()
+	
+					startTime := time.Now()
+					if feed.Url == "" {
+						return
+					} else {
+						fmt.Printf("fetching feed %s\n", feed.Url)
+					}
+					
+					err := rss.FetchAndStoreFeed(s, &feed, ctxWithTimeout)
+	
+					if err != nil {
+						log.Printf("[Worker %d] Timeout or failed to fetch feed '%s': %v", workerID, feed.Url, err)
+					} else {
+						log.Printf("[Worker %d] Succesfully fetched feed '%s' in %v", workerID, feed.Url, time.Since(startTime))
+					}
+				}
+			}(i)
+		}
+
+		wg.Wait()
+	}
+
+	return nil
 }
 
 func handlerReset(s *state.State, cmd Command) error {

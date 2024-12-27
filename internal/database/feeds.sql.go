@@ -132,46 +132,42 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]Feed, error) {
 	return items, nil
 }
 
-const getNextFeedToFetch = `-- name: GetNextFeedToFetch :one
-SELECT feeds.id, feeds.created_at, feeds.updated_at, name, url, feeds.user_id, last_fetched_at, feed_follows.id, feed_follows.created_at, feed_follows.updated_at, feed_follows.user_id, feed_id
+const getNextFeedsToFetch = `-- name: GetNextFeedsToFetch :many
+SELECT feeds.id, feeds.created_at, feeds.updated_at, feeds.name, feeds.url, feeds.user_id, feeds.last_fetched_at
 FROM feeds INNER JOIN feed_follows ON feeds.id = feed_follows.feed_id
 ORDER BY last_fetched_at ASC NULLS FIRST
-LIMIT 1
+LIMIT $1
 `
 
-type GetNextFeedToFetchRow struct {
-	ID            uuid.UUID
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	Name          string
-	Url           string
-	UserID        uuid.UUID
-	LastFetchedAt sql.NullTime
-	ID_2          uuid.UUID
-	CreatedAt_2   time.Time
-	UpdatedAt_2   time.Time
-	UserID_2      uuid.UUID
-	FeedID        uuid.UUID
-}
-
-func (q *Queries) GetNextFeedToFetch(ctx context.Context) (GetNextFeedToFetchRow, error) {
-	row := q.db.QueryRowContext(ctx, getNextFeedToFetch)
-	var i GetNextFeedToFetchRow
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.Url,
-		&i.UserID,
-		&i.LastFetchedAt,
-		&i.ID_2,
-		&i.CreatedAt_2,
-		&i.UpdatedAt_2,
-		&i.UserID_2,
-		&i.FeedID,
-	)
-	return i, err
+func (q *Queries) GetNextFeedsToFetch(ctx context.Context, limit int32) ([]Feed, error) {
+	rows, err := q.db.QueryContext(ctx, getNextFeedsToFetch, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Feed
+	for rows.Next() {
+		var i Feed
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+			&i.Url,
+			&i.UserID,
+			&i.LastFetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markFeedFetched = `-- name: MarkFeedFetched :exec

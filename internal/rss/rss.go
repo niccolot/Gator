@@ -32,7 +32,7 @@ type RSSItem struct {
 	PubDate     string `xml:"pubDate"`
 }
 
-func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	req, errReq := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
 	if errReq != nil {
 		return nil, errReq
@@ -60,75 +60,90 @@ func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	return feedStruct, nil
 }
 
-func ScrapeFeeds(s *state.State, ctx context.Context) error {
-	feedToFetch, err := s.Db.GetNextFeedToFetch(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get next feed to fetch: %w", err)
+func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.Context) error {
+	select {
+	case <- ctx.Done():
+		return fmt.Errorf("warning: fetch time exceeded time between request, timeout")
+	default:
+		feed, err := fetchFeed(ctx, feedToFetch.Url)
+		if err != nil {
+			log.Printf("Error: failed to fetch feed '%s': %v\n", feedToFetch.Url, err)
+			return err
+		}
+
+		// sql (possibly) null TIMESTAMP wants this kind of time object
+		nullableTime := sql.NullTime{
+			Time: time.Now(),
+			Valid: true,
+		}
+
+		fetchedPars := &database.MarkFeedFetchedParams{
+			ID: feedToFetch.ID,
+			LastFetchedAt: nullableTime,
+		}
+
+		err = s.Db.MarkFeedFetched(ctx, *fetchedPars)
+		if err != nil {
+			log.Printf("Error: failed to mark feed '%s' as fetched: %v", feedToFetch.Url, err)
+			return err
+		}
+
+		for _, item := range(feed.Channel.Item) {
+			processFeedItem(s, feedToFetch, &item, nullableTime.Time)
+		}
+
+		return err
+	}	
+}
+
+func processFeedItem(s *state.State, feedToFetch *database.Feed, item *RSSItem, fetchTime time.Time) {
+	pubTime, errTime := parseTime(item.PubDate)
+	if errTime != nil {
+		log.Printf("Warning: couldn't parse time for post '%s': %v\n", item.Title, errTime)
 	}
 
-	feed, err := FetchFeed(ctx, feedToFetch.Url)
-	if err != nil {
-		return fmt.Errorf("failed to fetch feed '%s': %v", feedToFetch.Url, err)
-	}
-
-	// sql (possibly) null TIMESTAMP wants this kind of time object
-	nullableTime := sql.NullTime{
-		Time: time.Now(),
+	nullableTitle := sql.NullString{
+		String: item.Title,
 		Valid: true,
 	}
 
-	fetchedPars := &database.MarkFeedFetchedParams{
-		ID: feedToFetch.ID,
-		LastFetchedAt: nullableTime,
+	nullPubTime := sql.NullTime{
+		Time: pubTime,
+		Valid: true,
+	}
+	
+	nullableDescription := getDescription(item)
+	
+	postPars := &database.CreatePostParams{
+		ID: uuid.New(),
+		CreatedAt: fetchTime,
+		UpdatedAt: fetchTime,
+		Title: nullableTitle,
+		Url: item.Link,
+		Description: *nullableDescription,
+		PublishedAt: nullPubTime,
+		FeedID: feedToFetch.ID,
 	}
 
-	err = s.Db.MarkFeedFetched(ctx, *fetchedPars)
+	_, errPost := s.Db.CreatePost(context.Background(), *postPars)
+	if errPost != nil {
+		log.Printf("Warning: failed to save post '%s' in database: %v\n", 
+			nullableTitle.String, errPost)
+	}
+}
+
+func ScrapeFeeds(s *state.State, ctx context.Context, batchSize int32) ([]database.Feed, error) {
+	feeds, err := s.Db.GetNextFeedsToFetch(ctx, batchSize)
 	if err != nil {
-		return err
-	}	
-
-	for _, item := range(feed.Channel.Item) {
-		pubTime, errTime := parseTime(item.PubDate)
-		if errTime != nil {
-			log.Printf("Warning: couldn't parse time for post '%s': %v", item.Title, errTime)
-		}
-
-		nullableTitle := sql.NullString{
-			String: item.Title,
-			Valid: true,
-		}
-
-		nullPubTime := sql.NullTime{
-			Time: pubTime,
-			Valid: true,
-		}
-		
-		nullableDescription := getDescription(&item)
-
-		postPars := &database.CreatePostParams{
-			ID: uuid.New(),
-			CreatedAt: nullableTime.Time,
-			UpdatedAt: nullableTime.Time,
-			Title: nullableTitle,
-			Url: item.Link,
-			Description: *nullableDescription,
-			PublishedAt: nullPubTime,
-			FeedID: feedToFetch.ID,
-		}
-
-		_, errPost := s.Db.CreatePost(ctx, *postPars)
-		if errPost != nil {
-			log.Printf("Warning: failed to save post '%s' in database: %v", 
-				nullableTitle.String, errPost)
-		}
+		return nil, err
 	}
 
-	return err
+	return feeds, nil
 }
 
 func getDescription(item *RSSItem) *sql.NullString {
 	/*
-	some blogs does not have a proper 'description' rss field
+	some blogs do not have a proper 'description' rss field
 	but contains just some html, these cases are discarded
 	*/
 	var nullableDescription sql.NullString

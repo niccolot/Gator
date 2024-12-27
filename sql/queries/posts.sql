@@ -41,4 +41,3 @@ FROM posts
 INNER JOIN users_posts ON users_posts.feed_id = posts.feed_id
 ORDER BY COALESCE(posts.created_at, posts.updated_at) DESC
 LIMIT $2;
-

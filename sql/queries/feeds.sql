@@ -29,8 +29,8 @@ SET last_fetched_at = $2,
 	updated_at = $2
 WHERE id = $1;
 
--- name: GetNextFeedToFetch :one
-SELECT *
+-- name: GetNextFeedsToFetch :many
+SELECT feeds.*
 FROM feeds INNER JOIN feed_follows ON feeds.id = feed_follows.feed_id
 ORDER BY last_fetched_at ASC NULLS FIRST
-LIMIT 1;
+LIMIT $1;
