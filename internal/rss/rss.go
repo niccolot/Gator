@@ -63,7 +63,7 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.Context) error {
 	select {
 	case <- ctx.Done():
-		return fmt.Errorf("warning: fetch time exceeded time between request, timeout")
+		return fmt.Errorf("warning: fetch time exceeded time between requests, timeout")
 	default:
 		feed, err := fetchFeed(ctx, feedToFetch.Url)
 		if err != nil {
@@ -89,22 +89,84 @@ func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.C
 		}
 
 		for _, item := range(feed.Channel.Item) {
-			processFeedItem(s, feedToFetch, &item, nullableTime.Time)
+			processFeedItem(s, feedToFetch.ID, &item, nullableTime.Time)
 		}
 
 		return err
 	}	
 }
-
-func processFeedItem(s *state.State, feedToFetch *database.Feed, item *RSSItem, fetchTime time.Time) {
-	pubTime, errTime := parseTime(item.PubDate)
-	if errTime != nil {
-		log.Printf("Warning: couldn't parse time for post '%s': %v\n", item.Title, errTime)
-	}
-
+/*
+func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
 	nullableTitle := sql.NullString{
 		String: item.Title,
 		Valid: true,
+	}
+
+	startTime := time.Now()
+	post, err := s.Db.GetPostFromTitle(context.Background(), nullableTitle)
+	elapsed := time.Since(startTime)
+	fmt.Println("checking the post took: ", elapsed)
+	fmt.Println(post.ID)
+	// new post not in the database
+	if err != nil { 
+		fmt.Println("BRANCH A")
+		pubTime, errTime := parseTime(item.PubDate)
+		if errTime != nil {
+			log.Printf("Warning: couldn't parse time for post '%s': %v\n", item.Title, errTime)
+		}
+
+		nullPubTime := sql.NullTime{
+			Time: pubTime,
+			Valid: true,
+		}
+		
+		nullableDescription := getDescription(item)
+		
+		postPars := &database.CreatePostParams{
+			ID: uuid.New(),
+			CreatedAt: fetchTime,
+			UpdatedAt: fetchTime,
+			Title: nullableTitle,
+			Url: item.Link,
+			Description: *nullableDescription,
+			PublishedAt: nullPubTime,
+			FeedID: feedID,
+		}
+
+		_, errPost := s.Db.CreatePost(context.Background(), *postPars)
+		if errPost != nil {
+			log.Printf("Warning: failed to save post '%s' in the database: %v\n", 
+				nullableTitle.String, errPost)
+		}
+
+	} else { // post already in the database
+		fmt.Println("BRANCH B")
+		updatePars := &database.UpdatePostParams{
+			ID: post.ID,
+			UpdatedAt: time.Now(),
+		}
+		errSave := s.Db.UpdatePost(context.Background(), *updatePars)
+		if errSave != nil {
+			log.Printf("Warning: failed to update post '%s': %v\n", post.Title.String, errSave)
+		}
+	}	
+}
+*/
+
+func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
+	nullableTitle := sql.NullString{
+		String: item.Title,
+		Valid: true,
+	}
+
+	//_, err := s.Db.GetPostFromTitle(context.Background(), nullableTitle)
+	//if err != nil {
+	//	log.Printf("err is not nil %v", err)
+	//}
+	
+	pubTime, errTime := parseTime(item.PubDate)
+	if errTime != nil {
+		log.Printf("Warning: couldn't parse time for post '%s': %v\n", item.Title, errTime)
 	}
 
 	nullPubTime := sql.NullTime{
@@ -122,15 +184,17 @@ func processFeedItem(s *state.State, feedToFetch *database.Feed, item *RSSItem, 
 		Url: item.Link,
 		Description: *nullableDescription,
 		PublishedAt: nullPubTime,
-		FeedID: feedToFetch.ID,
+		FeedID: feedID,
 	}
 
 	_, errPost := s.Db.CreatePost(context.Background(), *postPars)
 	if errPost != nil {
-		log.Printf("Warning: failed to save post '%s' in database: %v\n", 
+		log.Printf("Warning: failed to save post '%s' in the database: %v\n", 
 			nullableTitle.String, errPost)
 	}
 }
+
+
 
 func ScrapeFeeds(s *state.State, ctx context.Context, batchSize int32) ([]database.Feed, error) {
 	feeds, err := s.Db.GetNextFeedsToFetch(ctx, batchSize)

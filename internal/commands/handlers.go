@@ -134,7 +134,6 @@ func handlerAgg(s *state.State, cmd Command) error {
 
 	for range ticker.C {
 		feedQueue, errScrape := rss.ScrapeFeeds(s, context.Background(), batchSize)
-		fmt.Println(len(feedQueue))
 		if errScrape != nil {
 			log.Printf("Warning: error retrieving feeds: %v" ,errScrape)
 			continue
@@ -164,10 +163,7 @@ func handlerAgg(s *state.State, cmd Command) error {
 					startTime := time.Now()
 					if feed.Url == "" {
 						return
-					} else {
-						fmt.Printf("fetching feed %s\n", feed.Url)
-					}
-					
+					} 
 					err := rss.FetchAndStoreFeed(s, &feed, ctxWithTimeout)
 	
 					if err != nil {

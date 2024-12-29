@@ -71,10 +71,31 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 	return i, err
 }
 
+const getPostFromTitle = `-- name: GetPostFromTitle :one
+SELECT id, created_at, updated_at, title, url, description, published_at, feed_id FROM posts
+WHERE title = $1
+`
+
+func (q *Queries) GetPostFromTitle(ctx context.Context, title sql.NullString) (Post, error) {
+	row := q.db.QueryRowContext(ctx, getPostFromTitle, title)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.Url,
+		&i.Description,
+		&i.PublishedAt,
+		&i.FeedID,
+	)
+	return i, err
+}
+
 const getPostsForUser = `-- name: GetPostsForUser :many
 WITH users_posts AS (
     SELECT feed_follows.feed_id,
-            feeds.name 
+            feeds.name AS feed_name
     FROM feed_follows 
     INNER JOIN feeds ON feed_follows.feed_id = feeds.id 
     WHERE feed_follows.user_id = $1
@@ -84,7 +105,7 @@ SELECT
     posts.url,
     posts.published_at,
     posts.description,
-    users_posts.name AS feed_name
+    users_posts.feed_name AS feed_name
 FROM posts
 INNER JOIN users_posts ON users_posts.feed_id = posts.feed_id
 ORDER BY COALESCE(posts.created_at, posts.updated_at) DESC
@@ -131,4 +152,20 @@ func (q *Queries) GetPostsForUser(ctx context.Context, arg GetPostsForUserParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const updatePost = `-- name: UpdatePost :exec
+UPDATE posts
+SET updated_at = $2
+WHERE id = $1
+`
+
+type UpdatePostParams struct {
+	ID        uuid.UUID
+	UpdatedAt time.Time
+}
+
+func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) error {
+	_, err := q.db.ExecContext(ctx, updatePost, arg.ID, arg.UpdatedAt)
+	return err
 }
