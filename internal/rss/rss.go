@@ -95,21 +95,17 @@ func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.C
 		return err
 	}	
 }
-/*
+
 func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
 	nullableTitle := sql.NullString{
 		String: item.Title,
 		Valid: true,
 	}
 
-	startTime := time.Now()
 	post, err := s.Db.GetPostFromTitle(context.Background(), nullableTitle)
-	elapsed := time.Since(startTime)
-	fmt.Println("checking the post took: ", elapsed)
-	fmt.Println(post.ID)
+
 	// new post not in the database
 	if err != nil { 
-		fmt.Println("BRANCH A")
 		pubTime, errTime := parseTime(item.PubDate)
 		if errTime != nil {
 			log.Printf("Warning: couldn't parse time for post '%s': %v\n", item.Title, errTime)
@@ -140,7 +136,6 @@ func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime 
 		}
 
 	} else { // post already in the database
-		fmt.Println("BRANCH B")
 		updatePars := &database.UpdatePostParams{
 			ID: post.ID,
 			UpdatedAt: time.Now(),
@@ -151,8 +146,8 @@ func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime 
 		}
 	}	
 }
-*/
 
+/*
 func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
 	nullableTitle := sql.NullString{
 		String: item.Title,
@@ -193,8 +188,7 @@ func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime 
 			nullableTitle.String, errPost)
 	}
 }
-
-
+*/
 
 func ScrapeFeeds(s *state.State, ctx context.Context, batchSize int32) ([]database.Feed, error) {
 	feeds, err := s.Db.GetNextFeedsToFetch(ctx, batchSize)
