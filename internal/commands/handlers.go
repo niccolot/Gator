@@ -181,14 +181,49 @@ func handlerAgg(s *state.State, cmd Command) error {
 	return nil
 }
 
+func handlerResetUsers(s *state.State, cmd Command) error {
+	if len(cmd.Args) != 0 {
+		return fmt.Errorf("usage: gator resetusers")
+	}
+
+	errDelete := s.Db.ResetUsers(context.Background())
+	if errDelete != nil {
+		return fmt.Errorf("error while resetting database: %v", errDelete)
+	}
+
+	fmt.Println("users succesfully reset")
+
+	return nil
+}
+
+func handlerResetFeeds(s *state.State, cmd Command) error {
+	if len(cmd.Args) != 0 {
+		return fmt.Errorf("usage: gator resetfeeds")
+	}
+
+	errDelete := s.Db.ResetFeeds(context.Background())
+	if errDelete != nil {
+		return fmt.Errorf("error while resetting database: %v", errDelete)
+	}
+
+	fmt.Println("feeds succesfully reset")
+
+	return nil
+}
+
 func handlerReset(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 0 {
 		return fmt.Errorf("usage: gator reset")
 	}
 
-	errDelete := s.Db.Reset(context.Background())
-	if errDelete != nil {
-		return fmt.Errorf("error while resetting database: %v", errDelete)
+	errDeleteUsers := s.Db.ResetUsers(context.Background())
+	if errDeleteUsers != nil {
+		return fmt.Errorf("error while resetting users: %v", errDeleteUsers)
+	}
+
+	errDeleteFeeds := s.Db.ResetUsers(context.Background())
+	if errDeleteFeeds != nil {
+		return fmt.Errorf("error while resetting feeds: %v", errDeleteFeeds)
 	}
 
 	fmt.Println("database succesfully reset")
@@ -231,12 +266,11 @@ func handlerAddFeed(s *state.State, cmd Command, user *database.User) error {
 		return fmt.Errorf("error while updating following list: %v", errFeedFollows)
 	}
 
-	fmt.Printf("Feed ID: %s\n", feed.ID)
+	fmt.Printf("Feed name: %s\n", feed.Name)
+	fmt.Println(feed.ID)
 	fmt.Printf("Created at: %s\n", feed.CreatedAt)
 	fmt.Printf("Updated at; %s\n", feed.UpdatedAt)
-	fmt.Printf("Feed name: %s\n", feed.Name)
 	fmt.Printf("URL: %s\n", feed.Url)
-	fmt.Printf("UserID: %s\n", user.ID)
 
 	return nil
 }
@@ -257,6 +291,7 @@ func handlerFeeds(s *state.State, cmd Command) error {
 			return fmt.Errorf("error while retrieving username from database; %v", errUser)
 		}
 		
+		fmt.Println()
 		fmt.Printf("Feed ID: %s\n", feed.ID)
 		fmt.Printf("Created at: %s\n", feed.CreatedAt)
 		fmt.Printf("Updated at; %s\n", feed.UpdatedAt)
@@ -314,7 +349,10 @@ func handlerFollowing(s *state.State, cmd Command, user *database.User) error {
 		if errFeed != nil {
 			return fmt.Errorf("error while retrieving followed feeds details: %v", errFeed)
 		}
+		fmt.Println()
 		fmt.Println(feed.Name)
+		fmt.Println(feed.Url)
+		fmt.Println(feed.ID)
 	}
 
 	return nil
@@ -356,23 +394,28 @@ func handlerBrowse(s *state.State, cmd Command, user *database.User) error {
 		return fmt.Errorf("failed to parse limit value: %v", errConv)
 	}
 
-	getPostsPars := &database.GetPostsForUserParams{
-		UserID: user.ID,
-		Limit: int32(limit), // ParseInt is bugged and always returns int64 regardless of the choice
-	}
+	//getPostsPars := &database.GetPostsForUserParams{
+	//	UserID: user.ID,
+	//	Limit: int32(limit), // ParseInt is bugged and always returns int64 regardless of the choice
+	//}
 
-	posts, errPosts := s.Db.GetPostsForUser(context.Background(), *getPostsPars)
+	posts, errPosts := s.Db.GetPostsForUser(context.Background(), int32(limit))
 	if errPosts != nil {
 		return fmt.Errorf("failed to get posts from database: %v", errPosts)
 	}
 
 	for _, post := range(posts) {
 		fmt.Println()
-		fmt.Println("Feed: ", post.FeedName)
+		//fmt.Println("Feed: ", post.FeedName)
+		//feed, _ := s.Db.GetFeedFromID(context.Background(), post.FeedID)
+		fmt.Println("Feed: ", post.FeedID)
 		fmt.Println(post.Title.String)
-		if len(post.Description.String) != 0 {
-			fmt.Println(post.Description.String)
-		}
+		//if len(post.Description.String) != 0 {
+		//	fmt.Println(post.Description.String)
+		//}
+		fmt.Println("Description: ", post.Description.String)
+		fmt.Println("Published at: ", post.PublishedAt.Time)
+		fmt.Println("Link: ", post.Url)
 	}
 
 	return nil

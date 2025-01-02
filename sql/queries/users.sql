@@ -21,5 +21,5 @@ WHERE name = $1;
 SELECT * FROM users
 WHERE id = $1;
 
--- name: Reset :exec
+-- name: ResetUsers :exec
 DELETE FROM users;

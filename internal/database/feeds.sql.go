@@ -186,3 +186,12 @@ func (q *Queries) MarkFeedFetched(ctx context.Context, arg MarkFeedFetchedParams
 	_, err := q.db.ExecContext(ctx, markFeedFetched, arg.ID, arg.LastFetchedAt)
 	return err
 }
+
+const resetFeeds = `-- name: ResetFeeds :exec
+DELETE FROM feeds
+`
+
+func (q *Queries) ResetFeeds(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetFeeds)
+	return err
+}

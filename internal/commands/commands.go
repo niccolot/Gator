@@ -39,6 +39,8 @@ func (c *Commands) Init() {
 
 	c.RegisterCmd("login", handlerLogin)
 	c.RegisterCmd("register", handlerRegister)
+	c.RegisterCmd("resetusers", handlerResetUsers)
+	c.RegisterCmd("resetfeeds", handlerResetFeeds)
 	c.RegisterCmd("reset", handlerReset)
 	c.RegisterCmd("users", handlerGetUsers)
 	c.RegisterCmd("agg", handlerAgg)

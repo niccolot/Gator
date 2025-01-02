@@ -34,3 +34,6 @@ SELECT feeds.*
 FROM feeds INNER JOIN feed_follows ON feeds.id = feed_follows.feed_id
 ORDER BY last_fetched_at ASC NULLS FIRST
 LIMIT $1;
+
+-- name: ResetFeeds :exec
+DELETE FROM feeds;

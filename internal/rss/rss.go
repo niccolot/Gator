@@ -95,7 +95,7 @@ func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.C
 		return err
 	}	
 }
-
+/*
 func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
 	nullableTitle := sql.NullString{
 		String: item.Title,
@@ -146,8 +146,8 @@ func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime 
 		}
 	}	
 }
+*/
 
-/*
 func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
 	nullableTitle := sql.NullString{
 		String: item.Title,
@@ -177,7 +177,7 @@ func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime 
 		UpdatedAt: fetchTime,
 		Title: nullableTitle,
 		Url: item.Link,
-		Description: *nullableDescription,
+		Description: nullableDescription,
 		PublishedAt: nullPubTime,
 		FeedID: feedID,
 	}
@@ -188,7 +188,6 @@ func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime 
 			nullableTitle.String, errPost)
 	}
 }
-*/
 
 func ScrapeFeeds(s *state.State, ctx context.Context, batchSize int32) ([]database.Feed, error) {
 	feeds, err := s.Db.GetNextFeedsToFetch(ctx, batchSize)
@@ -199,7 +198,7 @@ func ScrapeFeeds(s *state.State, ctx context.Context, batchSize int32) ([]databa
 	return feeds, nil
 }
 
-func getDescription(item *RSSItem) *sql.NullString {
+func getDescription(item *RSSItem) sql.NullString {
 	/*
 	some blogs do not have a proper 'description' rss field
 	but contains just some html, these cases are discarded
@@ -218,7 +217,7 @@ func getDescription(item *RSSItem) *sql.NullString {
 		nullableDescription = sql.NullString{Valid: false}
 	}
 
-	return &nullableDescription
+	return nullableDescription
 }
 
 func parseTime(timeStr string) (time.Time, error) {
@@ -228,7 +227,7 @@ func parseTime(timeStr string) (time.Time, error) {
 		time.RFC3339,
 		time.RFC822,
 		time.RFC822Z,
-		// add more formats as needed
+		// ...add more formats as needed
 	}
 
 	for _, format := range(formats) {
