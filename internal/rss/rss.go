@@ -95,69 +95,12 @@ func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.C
 		return err
 	}	
 }
-/*
-func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
-	nullableTitle := sql.NullString{
-		String: item.Title,
-		Valid: true,
-	}
-
-	post, err := s.Db.GetPostFromTitle(context.Background(), nullableTitle)
-
-	// new post not in the database
-	if err != nil { 
-		pubTime, errTime := parseTime(item.PubDate)
-		if errTime != nil {
-			log.Printf("Warning: couldn't parse time for post '%s': %v\n", item.Title, errTime)
-		}
-
-		nullPubTime := sql.NullTime{
-			Time: pubTime,
-			Valid: true,
-		}
-		
-		nullableDescription := getDescription(item)
-		
-		postPars := &database.CreatePostParams{
-			ID: uuid.New(),
-			CreatedAt: fetchTime,
-			UpdatedAt: fetchTime,
-			Title: nullableTitle,
-			Url: item.Link,
-			Description: *nullableDescription,
-			PublishedAt: nullPubTime,
-			FeedID: feedID,
-		}
-
-		_, errPost := s.Db.CreatePost(context.Background(), *postPars)
-		if errPost != nil {
-			log.Printf("Warning: failed to save post '%s' in the database: %v\n", 
-				nullableTitle.String, errPost)
-		}
-
-	} else { // post already in the database
-		updatePars := &database.UpdatePostParams{
-			ID: post.ID,
-			UpdatedAt: time.Now(),
-		}
-		errSave := s.Db.UpdatePost(context.Background(), *updatePars)
-		if errSave != nil {
-			log.Printf("Warning: failed to update post '%s': %v\n", post.Title.String, errSave)
-		}
-	}	
-}
-*/
 
 func processFeedItem(s *state.State, feedID uuid.UUID, item *RSSItem, fetchTime time.Time) {
 	nullableTitle := sql.NullString{
 		String: item.Title,
 		Valid: true,
 	}
-
-	//_, err := s.Db.GetPostFromTitle(context.Background(), nullableTitle)
-	//if err != nil {
-	//	log.Printf("err is not nil %v", err)
-	//}
 	
 	pubTime, errTime := parseTime(item.PubDate)
 	if errTime != nil {

@@ -394,26 +394,20 @@ func handlerBrowse(s *state.State, cmd Command, user *database.User) error {
 		return fmt.Errorf("failed to parse limit value: %v", errConv)
 	}
 
-	//getPostsPars := &database.GetPostsForUserParams{
-	//	UserID: user.ID,
-	//	Limit: int32(limit), // ParseInt is bugged and always returns int64 regardless of the choice
-	//}
+	getPostsPars := &database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit: int32(limit), // ParseInt is bugged and always returns int64 regardless of the choice
+	}
 
-	posts, errPosts := s.Db.GetPostsForUser(context.Background(), int32(limit))
+	posts, errPosts := s.Db.GetPostsForUser(context.Background(), *getPostsPars)
 	if errPosts != nil {
 		return fmt.Errorf("failed to get posts from database: %v", errPosts)
 	}
 
 	for _, post := range(posts) {
 		fmt.Println()
-		//fmt.Println("Feed: ", post.FeedName)
-		//feed, _ := s.Db.GetFeedFromID(context.Background(), post.FeedID)
-		fmt.Println("Feed: ", post.FeedID)
+		fmt.Println("Feed: ", post.FeedName)
 		fmt.Println(post.Title.String)
-		//if len(post.Description.String) != 0 {
-		//	fmt.Println(post.Description.String)
-		//}
-		fmt.Println("Description: ", post.Description.String)
 		fmt.Println("Published at: ", post.PublishedAt.Time)
 		fmt.Println("Link: ", post.Url)
 	}
