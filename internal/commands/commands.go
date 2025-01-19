@@ -9,6 +9,7 @@ import (
 type Command struct {
 	CmdName string
 	Args []string
+	Description string
 }
 
 type Commands struct {
