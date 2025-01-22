@@ -90,6 +90,8 @@ func main() {
 
 	line.SetCtrlCAborts(true)
 
+	var Warning = log.New(os.Stdout, "\u001b[33mWARNING: \u001B[0m", 0)
+
 	for {
 		fmt.Println()
 		input, err := line.Prompt("Gator > ")
@@ -114,9 +116,18 @@ func main() {
 			Args: args,
 		}
 
+		if cmdName == "aggregate" {
+			go func() {
+				errCmd := cmds.Run(&s, cmd)
+				if errCmd != nil {
+					Warning.Println(errCmd)
+				}
+			} ()
+		}
+
 		errCmd := cmds.Run(&s, cmd)
 		if errCmd != nil {
-			log.Fatal(errCmd)
+			Warning.Println(errCmd)
 		}
 
 		fmt.Println()

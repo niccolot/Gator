@@ -23,7 +23,7 @@ func (c *Commands) RegisterCmd(name string, f func(*state.State, Command) error)
 func (c *Commands) Run(s *state.State, cmd Command) error {
 	handler, ok := c.Handlers[cmd.CmdName]
 	if !ok {
-		return fmt.Errorf("error: Command %s not found", cmd.CmdName)
+		return fmt.Errorf("command %s not found", cmd.CmdName)
 	}
 
 	errCmd := handler(s,cmd)
@@ -44,7 +44,7 @@ func (c *Commands) Init() {
 	c.RegisterCmd("resetfeeds", handlerResetFeeds)
 	c.RegisterCmd("reset", handlerReset)
 	c.RegisterCmd("users", handlerGetUsers)
-	c.RegisterCmd("agg", handlerAgg)
+	c.RegisterCmd("aggregate", middlewareLoggedIn(handlerAggregate))
 	c.RegisterCmd("addfeed", middlewareLoggedIn(handlerAddFeed))
 	c.RegisterCmd("feeds", handlerFeeds)
 	c.RegisterCmd("follow", middlewareLoggedIn(handlerFollow))
