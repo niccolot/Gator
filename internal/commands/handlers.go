@@ -107,31 +107,23 @@ func handlerGetUsers(s *state.State, cmd Command) error {
 }
 
 func handlerAggregate(s *state.State, cmd Command, user *database.User) error {
-	if len(cmd.Args) != 1 {
-		log.Printf("usage: aggregate <time between requests>")
-		return nil
+	timeBetweenReqs, err := parseAggregationInputs(s, &cmd, user)
+	if err != nil {
+		return err
+	}
+	
+	// logger
+	logFile, err := setLogger("aggregation.log")
+	if err != nil {
+		return fmt.Errorf("failed to set logger: %v", err)
 	}
 
-	following, errFollowing := s.Db.GetFeedFollowsForUser(context.Background(), user.ID)
-	if errFollowing != nil {
-		return fmt.Errorf("error while retrieving followed feeds from database: %v", errFollowing)
-	}
+	defer logFile.Close()
 
-	if len(following) == 0 {
-		return fmt.Errorf("no feed is being currently followed")
-	}
+	log.SetOutput(logFile)
 
-	timeBetweenReqs, errParse := time.ParseDuration(cmd.Args[0])
-	if errParse != nil {
-		return fmt.Errorf("error while parsing fetching frequency: %v", errParse)
-	}
-
-	if timeBetweenReqs < time.Second {
-		timeBetweenReqs = time.Second
-		log.Println("Warning: time between request selected is too small, set to default 1s")
-	}
-
-	fmt.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
+	// aggregation
+	log.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
 
 	batchSize := int32(2)
 	workers := 2
@@ -168,13 +160,14 @@ func handlerAggregate(s *state.State, cmd Command, user *database.User) error {
 	
 					ctxWithTimeout, cancel := context.WithTimeout(context.Background(), timeBetweenReqs)
 					defer cancel()
-	
-					startTime := time.Now()
+					
 					if feed.Url == "" {
 						return
 					} 
+					
+					startTime := time.Now()
 					err := rss.FetchAndStoreFeed(s, &feed, ctxWithTimeout)
-	
+					
 					if err != nil {
 						log.Printf("[Worker %d] Timeout or failed to fetch feed '%s': %v", workerID, feed.Url, err)
 					} else {
@@ -301,10 +294,10 @@ func handlerFeeds(s *state.State, cmd Command) error {
 		}
 		
 		fmt.Println()
+		fmt.Printf("Feed name: %s\n", feed.Name)
 		fmt.Printf("Feed ID: %s\n", feed.ID)
 		fmt.Printf("Created at: %s\n", feed.CreatedAt)
 		fmt.Printf("Updated at; %s\n", feed.UpdatedAt)
-		fmt.Printf("Feed name: %s\n", feed.Name)
 		fmt.Printf("URL: %s\n", feed.Url)
 		fmt.Printf("UserID: %s\n", feed.UserID)
 		fmt.Printf("Author name: %s\n", user.Name)

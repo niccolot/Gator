@@ -68,13 +68,12 @@ func main() {
 	dbURL := os.Getenv("DB_URL")
 	db, errDB := sql.Open("postgres", dbURL)
 	if errDB != nil {
-		log.Fatalf(fmt.Sprintf("error creating APIconfig: %v", errDB))
+		log.Fatalf(fmt.Sprintf("error opening database: %v", errDB))
 	}
 	
 	defer db.Close()
 
 	dbQueries := database.New(db)
-
 	cfg := config.Read()
 
 	s := state.State{
@@ -90,7 +89,8 @@ func main() {
 
 	line.SetCtrlCAborts(true)
 
-	var Warning = log.New(os.Stdout, "\u001b[33mWARNING: \u001B[0m", 0)
+	// cli logger
+	var warning = log.New(os.Stdout, "\u001b[33mWARNING: \u001B[0m", 0)
 
 	for {
 		fmt.Println()
@@ -120,16 +120,17 @@ func main() {
 			go func() {
 				errCmd := cmds.Run(&s, cmd)
 				if errCmd != nil {
-					Warning.Println(errCmd)
+					warning.Println("Error in background task:", errCmd)
 				}
-			} ()
+			}()
+			fmt.Println("Running 'aggregate' in the background...")
+		} else {
+			errCmd := cmds.Run(&s, cmd)
+			if errCmd != nil {
+				warning.Println(errCmd)
+			}
 		}
-
-		errCmd := cmds.Run(&s, cmd)
-		if errCmd != nil {
-			Warning.Println(errCmd)
-		}
-
+		
 		fmt.Println()
 	}
 }
