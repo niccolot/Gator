@@ -133,7 +133,7 @@ WHERE feed_follows.user_id = $1
 AND feed_id = (
     SELECT id
     FROM feeds
-    WHERE url = $2
+    WHERE url = $2 OR name = $2
 )
 `
 

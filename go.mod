@@ -7,3 +7,9 @@ require (
 	github.com/joho/godotenv v1.5.1 // direct
 	github.com/lib/pq v1.10.9 // direct
 )
+
+require (
+	github.com/mattn/go-runewidth v0.0.3 // indirect
+	github.com/peterh/liner v1.2.2 // direct
+	golang.org/x/sys v0.0.0-20211117180635-dee7805ff2e1 // indirect
+)

@@ -8,6 +8,7 @@ type Config struct {
 	DbURL string `json:"db_url"`
 	CurrentUserName string `json:"current_user_name"`
 	CurrentUserID uuid.UUID `json:"current_user_id"`
+	CmdHistory  []string `json:"cmd_history"`
 }
 
 func Read() *Config {

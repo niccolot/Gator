@@ -29,7 +29,7 @@ func middlewareLoggedIn(
 
 func handlerLogin(s *state.State, cmd Command) error {
 	if len(cmd.Args) == 0 {
-		return fmt.Errorf("usage: gator login <username>")
+		return fmt.Errorf("usage: login <username>")
 	}
 
 	name := cmd.Args[0]
@@ -57,7 +57,7 @@ func handlerLogin(s *state.State, cmd Command) error {
 
 func handlerRegister(s *state.State, cmd Command) error {
 	if len(cmd.Args) == 0 {
-		return fmt.Errorf("usage: gator register <username>")
+		return fmt.Errorf("usage: register <username>")
 	}	
 
 	name := cmd.Args[0]
@@ -87,7 +87,7 @@ func handlerRegister(s *state.State, cmd Command) error {
 
 func handlerGetUsers(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: gator users")
+		return fmt.Errorf("usage: users")
 	}
 
 	users, errUsers := s.Db.GetUsers(context.Background())
@@ -106,23 +106,24 @@ func handlerGetUsers(s *state.State, cmd Command) error {
 	return nil
 }
 
-func handlerAgg(s *state.State, cmd Command) error {
-	if len(cmd.Args) != 1 {
-		log.Printf("usage: gator agg <time between requests>")
-		return nil
+func handlerAggregate(s *state.State, cmd Command, user *database.User) error {
+	timeBetweenReqs, err := parseAggregationInputs(s, &cmd, user)
+	if err != nil {
+		return err
+	}
+	
+	// logger
+	logFile, err := setLogger("aggregation.log")
+	if err != nil {
+		return fmt.Errorf("failed to set logger: %v", err)
 	}
 
-	timeBetweenReqs, errParse := time.ParseDuration(cmd.Args[0])
-	if errParse != nil {
-		return fmt.Errorf("error while parsing fetching frequency: %v", errParse)
-	}
+	defer logFile.Close()
 
-	if timeBetweenReqs < time.Second {
-		timeBetweenReqs = time.Second
-		log.Println("Warning: time between request selected is too small, set to default 1s")
-	}
+	log.SetOutput(logFile)
 
-	fmt.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
+	// aggregation
+	log.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
 
 	batchSize := int32(2)
 	workers := 2
@@ -159,13 +160,14 @@ func handlerAgg(s *state.State, cmd Command) error {
 	
 					ctxWithTimeout, cancel := context.WithTimeout(context.Background(), timeBetweenReqs)
 					defer cancel()
-	
-					startTime := time.Now()
+					
 					if feed.Url == "" {
 						return
 					} 
+					
+					startTime := time.Now()
 					err := rss.FetchAndStoreFeed(s, &feed, ctxWithTimeout)
-	
+					
 					if err != nil {
 						log.Printf("[Worker %d] Timeout or failed to fetch feed '%s': %v", workerID, feed.Url, err)
 					} else {
@@ -183,7 +185,7 @@ func handlerAgg(s *state.State, cmd Command) error {
 
 func handlerResetUsers(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: gator resetusers")
+		return fmt.Errorf("usage: resetusers")
 	}
 
 	errDelete := s.Db.ResetUsers(context.Background())
@@ -198,7 +200,7 @@ func handlerResetUsers(s *state.State, cmd Command) error {
 
 func handlerResetFeeds(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: gator resetfeeds")
+		return fmt.Errorf("usage: resetfeeds")
 	}
 
 	errDelete := s.Db.ResetFeeds(context.Background())
@@ -213,7 +215,7 @@ func handlerResetFeeds(s *state.State, cmd Command) error {
 
 func handlerReset(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: gator reset")
+		return fmt.Errorf("usage: reset")
 	}
 
 	errDeleteUsers := s.Db.ResetUsers(context.Background())
@@ -233,7 +235,7 @@ func handlerReset(s *state.State, cmd Command) error {
 
 func handlerAddFeed(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 2 {
-		return fmt.Errorf("usage: gator <feed name> <feed url>")
+		return fmt.Errorf("usage: addfeed \"<feed name>\" \"<feed url>\"")
 	}
 
 	currTime := time.Now()
@@ -277,7 +279,7 @@ func handlerAddFeed(s *state.State, cmd Command, user *database.User) error {
 
 func handlerFeeds(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: gator feeds")
+		return fmt.Errorf("usage: feeds")
 	}
 
 	feeds, errFeeds := s.Db.GetFeeds(context.Background())
@@ -292,10 +294,10 @@ func handlerFeeds(s *state.State, cmd Command) error {
 		}
 		
 		fmt.Println()
+		fmt.Printf("Feed name: %s\n", feed.Name)
 		fmt.Printf("Feed ID: %s\n", feed.ID)
 		fmt.Printf("Created at: %s\n", feed.CreatedAt)
 		fmt.Printf("Updated at; %s\n", feed.UpdatedAt)
-		fmt.Printf("Feed name: %s\n", feed.Name)
 		fmt.Printf("URL: %s\n", feed.Url)
 		fmt.Printf("UserID: %s\n", feed.UserID)
 		fmt.Printf("Author name: %s\n", user.Name)
@@ -306,7 +308,7 @@ func handlerFeeds(s *state.State, cmd Command) error {
 
 func handlerFollow(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 1 {
-		return fmt.Errorf("usage: gator follow <feed url>")
+		return fmt.Errorf("usage: follow <feed url>")
 	}
 
 	currUserID := user.ID
@@ -336,7 +338,7 @@ func handlerFollow(s *state.State, cmd Command, user *database.User) error {
 
 func handlerFollowing(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: gator following")
+		return fmt.Errorf("usage: following")
 	}
 	
 	following, errFollowing := s.Db.GetFeedFollowsForUser(context.Background(), user.ID)
@@ -347,7 +349,8 @@ func handlerFollowing(s *state.State, cmd Command, user *database.User) error {
 	for _, feedFollow := range(following) {
 		feed, errFeed := s.Db.GetFeedFromID(context.Background(), feedFollow.FeedID)
 		if errFeed != nil {
-			return fmt.Errorf("error while retrieving followed feeds details: %v", errFeed)
+			fmt.Printf("error while retrieving followed feed details: %v", errFeed)
+			continue
 		}
 		fmt.Println()
 		fmt.Println(feed.Name)
@@ -360,13 +363,13 @@ func handlerFollowing(s *state.State, cmd Command, user *database.User) error {
 
 func handlerUnfollow(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 1 {
-		return fmt.Errorf("usage: gator unfollow <feed url>")
+		return fmt.Errorf("usage: unfollow <feed url> [or] unfollow \"<feed name>\"")
 	}
 
 	currUserID := user.ID
 	unfollowPars := &database.UnfollowParams{
 		UserID: currUserID,
-		Url: cmd.Args[0],
+		Url: cmd.Args[0], // url or name
 	}
 
 	errUnfollow := s.Db.Unfollow(context.Background(), *unfollowPars)
@@ -374,12 +377,23 @@ func handlerUnfollow(s *state.State, cmd Command, user *database.User) error {
 		return fmt.Errorf("error while removing feed from following list: %v", errUnfollow)
 	}
 
+	fmt.Println("feed succesfully unfollowed")
+
 	return nil
 }
 
 func handlerBrowse(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) > 1 {
-		return fmt.Errorf("usage: gator browse [optional] <limit>")
+		return fmt.Errorf("usage: browse [optional] <limit>")
+	}
+
+	following, errFollowing := s.Db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if errFollowing != nil {
+		return fmt.Errorf("error while retrieving followed feeds from database: %v", errFollowing)
+	}
+
+	if len(following) == 0 {
+		return fmt.Errorf("no feed is being currently followed")
 	}
 
 	var limitStr string;
