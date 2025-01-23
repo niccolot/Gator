@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/niccolot/BlogAggregator/internal/database"
-	"github.com/niccolot/BlogAggregator/internal/rss"
 	"github.com/niccolot/BlogAggregator/internal/state"
 )
 
@@ -107,77 +105,63 @@ func handlerGetUsers(s *state.State, cmd Command) error {
 }
 
 func handlerAggregate(s *state.State, cmd Command, user *database.User) error {
-	timeBetweenReqs, err := parseAggregationInputs(s, &cmd, user)
+	pars, err := parseAggregationInputs(s, &cmd, user)
 	if err != nil {
 		return err
 	}
+
+	numFeeds := pars.numFollowing
+	timeBetweenReqs := pars.timeBetweenReqs
+	logging := pars.logging
 	
-	// logger
-	logFile, err := setLogger("aggregation.log")
-	if err != nil {
-		return fmt.Errorf("failed to set logger: %v", err)
+	if logging {
+		logFile, err := setLogger("aggregation.log")
+		if err != nil {
+			return fmt.Errorf("failed to set logger: %v", err)
+		}
+
+		defer logFile.Close()
+
+		log.SetOutput(logFile)
+
+		log.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
 	}
-
-	defer logFile.Close()
-
-	log.SetOutput(logFile)
-
+	
 	// aggregation
-	log.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
-
-	batchSize := int32(2)
-	workers := 2
-	wg := sync.WaitGroup{}	
-	queueMux := sync.Mutex{}
-
 	ticker := time.NewTicker(timeBetweenReqs)
 	defer ticker.Stop()
 
+	s.Aggregating = true
+
+	aggPars := &aggPars{
+		s: s,
+		timeBetweenReqs: timeBetweenReqs,
+		numFeeds: numFeeds,
+		logging: logging,
+	}
+
+	/*
+	every timeBetweenReqs a total of 'workers' goroutines
+	are spawned and a total of 'batchSize' feeds are fetched 
+	*/
 	for range ticker.C {
-		feedQueue, errScrape := rss.ScrapeFeeds(s, context.Background(), batchSize)
-		if errScrape != nil {
-			log.Printf("Warning: error retrieving feeds: %v" ,errScrape)
-			continue
+		select {
+		case <-s.StopAggregation:
+			fmt.Println("Aggregation stopped")
+			return nil
+		default:
+			aggregate(aggPars)
 		}
+	} 
 
-		for i := 0; i<workers; i++ {
-			wg.Add(1)
-			go func(workerID int) {
-				defer wg.Done()
-				for {
-					queueMux.Lock()
-					var feed database.Feed
-					if len(feedQueue) > 0 {
-						feed = feedQueue[0]
-						feedQueue = feedQueue[1:]
-					}
-					queueMux.Unlock()
-	
-					// no more feeds in the queue
-					if feed.ID.String() == "" {
-						return
-					}
-	
-					ctxWithTimeout, cancel := context.WithTimeout(context.Background(), timeBetweenReqs)
-					defer cancel()
-					
-					if feed.Url == "" {
-						return
-					} 
-					
-					startTime := time.Now()
-					err := rss.FetchAndStoreFeed(s, &feed, ctxWithTimeout)
-					
-					if err != nil {
-						log.Printf("[Worker %d] Timeout or failed to fetch feed '%s': %v", workerID, feed.Url, err)
-					} else {
-						log.Printf("[Worker %d] Succesfully fetched feed '%s' in %v", workerID, feed.Url, time.Since(startTime))
-					}
-				}
-			}(i)
-		}
+	return nil
+}
 
-		wg.Wait()
+func handlerStopAgg(s *state.State, cmd Command) error {
+	if !s.Aggregating {
+		fmt.Println("Aggregation already not running")
+	} else {
+		s.StopAggregation <- true
 	}
 
 	return nil

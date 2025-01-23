@@ -67,7 +67,6 @@ func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.C
 	default:
 		feed, err := fetchFeed(ctx, feedToFetch.Url)
 		if err != nil {
-			log.Printf("Error: failed to fetch feed '%s': %v\n", feedToFetch.Url, err)
 			return err
 		}
 
@@ -84,7 +83,6 @@ func FetchAndStoreFeed(s *state.State, feedToFetch *database.Feed, ctx context.C
 
 		err = s.Db.MarkFeedFetched(ctx, *fetchedPars)
 		if err != nil {
-			log.Printf("Error: failed to mark feed '%s' as fetched: %v", feedToFetch.Url, err)
 			return err
 		}
 

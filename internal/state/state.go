@@ -8,4 +8,6 @@ import (
 type State struct {
 	Db *database.Queries
 	Cfg *config.Config
+	Aggregating bool
+	StopAggregation chan(bool)
 }

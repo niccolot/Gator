@@ -35,6 +35,8 @@ func main() {
 	s := state.State{
 		Db: dbQueries,
 		Cfg: cfg,
+		Aggregating: false,
+		StopAggregation: make(chan bool),
 	}
 
 	cmds := commands.Commands{}
@@ -63,7 +65,7 @@ func main() {
 		s.Cfg.CmdHistory = append(s.Cfg.CmdHistory, input)
 
 		cmdName, args := commands.ParseInput(input)
-		if cmdName == "exit" {
+		if cmdName == "exit" || cmdName == "q" || cmdName == "quit" {
 			break
 		}
 
@@ -72,20 +74,7 @@ func main() {
 			Args: args,
 		}
 
-		if cmdName == "aggregate" {
-			go func() {
-				errCmd := cmds.Run(&s, cmd)
-				if errCmd != nil {
-					warning.Println("Error in background task:", errCmd)
-				}
-			}()
-			fmt.Println("Running 'aggregate' in the background...")
-		} else {
-			errCmd := cmds.Run(&s, cmd)
-			if errCmd != nil {
-				warning.Println(errCmd)
-			}
-		}
+		commands.Run(cmd, &cmds, &s, warning)
 		
 		fmt.Println()
 	}

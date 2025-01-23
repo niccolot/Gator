@@ -68,27 +68,33 @@ func setLogger(filename string) (*os.File, error) {
 	}
 }
 
-func parseAggregationInputs(
-	s *state.State, 
-	cmd *Command, 
-	user *database.User) (timeBetweenReqs time.Duration, err error) {
-	
-	if len(cmd.Args) != 1 {
-		return 0, fmt.Errorf("usage: aggregate <time between requests>")
+func parseAggregationInputs(s *state.State, cmd *Command, user *database.User) (pars aggInitPars, err error) {
+	if len(cmd.Args) < 1 {
+		return aggInitPars{}, fmt.Errorf("usage: aggregate <time between requests> [optional] -log")
+	}
+
+	var log bool
+	if len(cmd.Args) == 2 {
+		if cmd.Args[1] != "-log" {
+			return aggInitPars{}, fmt.Errorf("usage: aggregate <time between requests> [optional] -log")
+		} else {
+			log = true
+		}
 	}
 
 	following, errFollowing := s.Db.GetFeedFollowsForUser(context.Background(), user.ID)
 	if errFollowing != nil {
-		return 0, fmt.Errorf("error while retrieving followed feeds from database: %v", errFollowing)
+		return aggInitPars{}, fmt.Errorf("error while retrieving followed feeds from database: %v", errFollowing)
 	}
 
-	if len(following) == 0 {
-		return 0, fmt.Errorf("no feed is being currently followed")
+	numFollowing := len(following)
+	if numFollowing == 0 {
+		return aggInitPars{}, fmt.Errorf("no feed is being currently followed")
 	}
 
 	timeBetweenReqs, errParse := time.ParseDuration(cmd.Args[0])
 	if errParse != nil {
-		return 0, fmt.Errorf("error while parsing fetching frequency: %v", errParse)
+		return aggInitPars{}, fmt.Errorf("error while parsing fetching frequency: %v", errParse)
 	}
 
 	if timeBetweenReqs < time.Second {
@@ -96,5 +102,12 @@ func parseAggregationInputs(
 		fmt.Println("Warning: time between request selected is too small, set to default 1s")
 	}
 
-	return timeBetweenReqs, nil
+	pars = aggInitPars{
+		numFollowing: numFollowing,
+		timeBetweenReqs: timeBetweenReqs,
+		logging: log,
+	}
+
+
+	return pars, nil
 }
