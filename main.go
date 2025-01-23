@@ -47,8 +47,7 @@ func main() {
 
 	line.SetCtrlCAborts(true)
 
-	// cli logger
-	var warning = log.New(os.Stdout, "\u001b[33mWARNING: \u001B[0m", 0)
+	logger := log.New(os.Stdout, "\u001b[33mWARNING: \u001B[0m", 0)
 
 	for {
 		fmt.Println()
@@ -74,7 +73,7 @@ func main() {
 			Args: args,
 		}
 
-		commands.Run(cmd, &cmds, &s, warning)
+		commands.Run(cmd, &cmds, &s, logger)
 		
 		fmt.Println()
 	}

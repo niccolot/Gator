@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
 	"strconv"
 	"time"
 
@@ -412,3 +413,24 @@ func handlerBrowse(s *state.State, cmd Command, user *database.User) error {
 
 	return nil
 }
+
+func handlerOpen(s *state.State, cmd Command) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: open <post url>")
+	}
+
+	_, err := s.Db.GetPostFromUrl(context.Background(), cmd.Args[0])
+	if err != nil {
+		return fmt.Errorf("failed to find post: %v", err)	
+	}
+
+	errOpen := exec.Command("open", cmd.Args[0]).Run()
+	if errOpen != nil {
+		return fmt.Errorf("error opening url: %v", errOpen)
+	}
+
+	fmt.Println("opening post in default browser...")
+
+	return nil
+}
+

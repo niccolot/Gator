@@ -74,4 +74,5 @@ func (c *Commands) Init() {
 	c.RegisterCmd("following", middlewareLoggedIn(handlerFollowing))
 	c.RegisterCmd("unfollow", middlewareLoggedIn(handlerUnfollow))
 	c.RegisterCmd("browse", middlewareLoggedIn(handlerBrowse))
+	c.RegisterCmd("open", handlerOpen)
 }

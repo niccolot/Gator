@@ -92,6 +92,27 @@ func (q *Queries) GetPostFromTitle(ctx context.Context, title sql.NullString) (P
 	return i, err
 }
 
+const getPostFromUrl = `-- name: GetPostFromUrl :one
+SELECT id, created_at, updated_at, title, url, description, published_at, feed_id FROM posts
+WHERE url = $1
+`
+
+func (q *Queries) GetPostFromUrl(ctx context.Context, url string) (Post, error) {
+	row := q.db.QueryRowContext(ctx, getPostFromUrl, url)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.Url,
+		&i.Description,
+		&i.PublishedAt,
+		&i.FeedID,
+	)
+	return i, err
+}
+
 const getPostsForUser = `-- name: GetPostsForUser :many
 WITH users_posts AS (
     SELECT feed_follows.feed_id,

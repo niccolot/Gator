@@ -25,9 +25,15 @@ CREATE INDEX idx_posts_updated_at ON posts(updated_at);
 
 CREATE INDEX idx_posts_title ON posts(title);
 
+CREATE INDEX idx_posts_url ON posts(url);
+
 -- name: GetPostFromTitle :one
 SELECT * FROM posts
 WHERE title = $1;
+
+-- name: GetPostFromUrl :one
+SELECT * FROM posts
+WHERE url = $1;
 
 -- name: UpdatePost :exec
 UPDATE posts
