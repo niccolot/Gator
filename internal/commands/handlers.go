@@ -8,7 +8,10 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/google/uuid"
+	"github.com/niccolot/BlogAggregator/internal/auth"
 	"github.com/niccolot/BlogAggregator/internal/database"
 	"github.com/niccolot/BlogAggregator/internal/state"
 )
@@ -42,6 +45,17 @@ func handlerLogin(s *state.State, cmd Command) error {
 		return fmt.Errorf("username '%s' not found", name)
 	}
 
+	fmt.Println("Insert password: ")
+	pass, err := term.ReadPassword(0)
+	if err != nil {
+		return fmt.Errorf("failed to read password: %v", err)
+	}
+
+	errCheck := auth.CheckPasswordHash(string(pass), user.HashedPassword)
+	if errCheck != nil {
+		return fmt.Errorf("invalid password")
+	}
+
 	errSet := s.Cfg.SetUser(user.Name, user.ID)
 	if errSet != nil {
 		return fmt.Errorf("error setting username: %v", errSet)
@@ -60,12 +74,34 @@ func handlerRegister(s *state.State, cmd Command) error {
 	}	
 
 	name := cmd.Args[0]
-	
+
+	fmt.Println("Choose a password: ")
+	pass, err := term.ReadPassword(0)
+	if err != nil {
+		return fmt.Errorf("failed to read password: %v", err)
+	}
+
+	fmt.Println("Repeat password: ")
+	pass2, err := term.ReadPassword(0)
+	if err != nil {
+		return fmt.Errorf("failed to read password: %v", err)
+	}
+
+	if string(pass) != string(pass2) {
+		return fmt.Errorf("enter the same password")
+	}
+
+	hashed_password, err := auth.HashPassword(string(pass))
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %v", err)
+	}
+
 	pars := database.CreateUserParams{
 		ID: uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Name: name,
+		HashedPassword: hashed_password,
 	}
 
 	_, errTemp := s.Db.GetUser(context.Background(), name)
@@ -96,9 +132,9 @@ func handlerGetUsers(s *state.State, cmd Command) error {
 
 	for _, user := range users {
 		if user.Name == s.Cfg.CurrentUserName {
-			fmt.Printf("* %s (current)", user.Name)
+			fmt.Printf("* %s (current)\n", user.Name)
 		} else {
-			fmt.Printf("* %s", user.Name)
+			fmt.Printf("* %s\n", user.Name)
 		}
 	}
 

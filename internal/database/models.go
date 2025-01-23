@@ -41,8 +41,10 @@ type Post struct {
 }
 
 type User struct {
-	ID        uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Name      string
+	ID             uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Name           string
+	HashedPassword string
+	IsSuperuser    sql.NullBool
 }
