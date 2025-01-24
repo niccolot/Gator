@@ -12,6 +12,19 @@ import (
 	"github.com/niccolot/BlogAggregator/internal/state"
 )
 
+func middlewareLoggedIn(
+	handler func(s *state.State, cmd Command, user *database.User) error) func(s *state.State, cmd Command) error {
+
+	return func(s *state.State, cmd Command) error {
+		user, err := s.Db.GetUser(context.Background(), s.Cfg.CurrentUserName)
+		if err != nil {
+			return err
+		}
+
+		return handler(s,cmd,&user)
+	}
+}
+
 func ParseInput(text string) (command string, args []string) {
 	/*
 	* @brief parses the command name and the arguments. Preserves text 

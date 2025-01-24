@@ -35,6 +35,10 @@ WHERE title = $1;
 SELECT * FROM posts
 WHERE url = $1;
 
+-- name: GetPost :one
+SELECT * FROM posts
+WHERE url = $1 OR title = $1;
+
 -- name: UpdatePost :exec
 UPDATE posts
 SET updated_at = $2

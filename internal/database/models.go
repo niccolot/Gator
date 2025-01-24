@@ -48,3 +48,10 @@ type User struct {
 	HashedPassword string
 	IsSuperuser    sql.NullBool
 }
+
+type UserPost struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+	UserID    uuid.UUID
+	PostID    uuid.UUID
+}

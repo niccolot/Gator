@@ -15,19 +15,6 @@ import (
 	"github.com/niccolot/BlogAggregator/internal/state"
 )
 
-func middlewareLoggedIn(
-	handler func(s *state.State, cmd Command, user *database.User) error) func(s *state.State, cmd Command) error {
-
-	return func(s *state.State, cmd Command) error {
-		user, err := s.Db.GetUser(context.Background(), s.Cfg.CurrentUserName)
-		if err != nil {
-			return err
-		}
-
-		return handler(s,cmd,&user)
-	}
-}
-
 func handlerLogin(s *state.State, cmd Command) error {
 	if len(cmd.Args) == 0 {
 		return fmt.Errorf("usage: login <username>")
@@ -561,3 +548,27 @@ func handlerChangePassword(s *state.State, cmd Command, user *database.User) err
 	return nil
 }
 
+func handlerBookmark(s *state.State, cmd Command, user *database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: bookmark <post title> [or] <post url>")
+	}
+
+	post, err := s.Db.GetPost(context.Background(), cmd.Args[0])
+	if err != nil {
+		return fmt.Errorf("failed to retrieve post '%s': %v", cmd.Args[0], err)
+	}
+
+	pars := &database.BookmarkPostParams{
+		ID: uuid.New(),
+		CreatedAt: time.Now(),
+		UserID: user.ID,
+		PostID: post.ID,
+	}
+
+	_, err = s.Db.BookmarkPost(context.Background(), *pars)
+	if err != nil {
+		return fmt.Errorf("failed to bookmark post '%s': %v", cmd.Args[0], err)
+	}
+
+	return nil
+}
