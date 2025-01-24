@@ -1,11 +1,12 @@
 -- name: CreateUser :one
-INSERT INTO users (id, created_at, updated_at, name, hashed_password)
+INSERT INTO users (id, created_at, updated_at, name, hashed_password, is_superuser)
 VALUES (
 	$1,
 	$2,
 	$3,
 	$4,
-	$5
+	$5,
+	$6
 )
 RETURNING *;
 
@@ -24,3 +25,13 @@ WHERE id = $1;
 
 -- name: ResetUsers :exec
 DELETE FROM users;
+
+-- name: UpdateToSuper :exec
+UPDATE users
+SET is_superuser = TRUE
+WHERE id = $1;
+
+-- name: ChangePassword :exec
+UPDATE users
+SET hashed_password = $2
+WHERE id = $1;

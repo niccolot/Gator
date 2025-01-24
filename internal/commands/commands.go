@@ -62,9 +62,9 @@ func (c *Commands) Init() {
 
 	c.RegisterCmd("login", handlerLogin)
 	c.RegisterCmd("register", handlerRegister)
-	c.RegisterCmd("resetusers", handlerResetUsers)
-	c.RegisterCmd("resetfeeds", handlerResetFeeds)
-	c.RegisterCmd("reset", handlerReset)
+	c.RegisterCmd("resetusers", middlewareLoggedIn(handlerResetUsers))
+	c.RegisterCmd("resetfeeds", middlewareLoggedIn(handlerResetFeeds))
+	c.RegisterCmd("reset", middlewareLoggedIn(handlerReset))
 	c.RegisterCmd("users", handlerGetUsers)
 	c.RegisterCmd("aggregate", middlewareLoggedIn(handlerAggregate))
 	c.RegisterCmd("stopagg", handlerStopAgg)
@@ -75,4 +75,6 @@ func (c *Commands) Init() {
 	c.RegisterCmd("unfollow", middlewareLoggedIn(handlerUnfollow))
 	c.RegisterCmd("browse", middlewareLoggedIn(handlerBrowse))
 	c.RegisterCmd("open", handlerOpen)
+	c.RegisterCmd("changesuper", middlewareLoggedIn(handlerChangeSuperUser))
+	c.RegisterCmd("changepassword", middlewareLoggedIn(handlerChangePassword))
 }

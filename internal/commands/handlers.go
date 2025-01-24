@@ -2,13 +2,12 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os/exec"
 	"strconv"
 	"time"
-
-	"golang.org/x/term"
 
 	"github.com/google/uuid"
 	"github.com/niccolot/BlogAggregator/internal/auth"
@@ -45,15 +44,9 @@ func handlerLogin(s *state.State, cmd Command) error {
 		return fmt.Errorf("username '%s' not found", name)
 	}
 
-	fmt.Println("Insert password: ")
-	pass, err := term.ReadPassword(0)
-	if err != nil {
-		return fmt.Errorf("failed to read password: %v", err)
-	}
-
-	errCheck := auth.CheckPasswordHash(string(pass), user.HashedPassword)
-	if errCheck != nil {
-		return fmt.Errorf("invalid password")
+	errPass := auth.AskPassword(&user)
+	if errPass != nil {
+		return errPass
 	}
 
 	errSet := s.Cfg.SetUser(user.Name, user.ID)
@@ -75,25 +68,20 @@ func handlerRegister(s *state.State, cmd Command) error {
 
 	name := cmd.Args[0]
 
-	fmt.Println("Choose a password: ")
-	pass, err := term.ReadPassword(0)
+	hashed_password, err := auth.AskNewPassword()
 	if err != nil {
-		return fmt.Errorf("failed to read password: %v", err)
+		return err
 	}
 
-	fmt.Println("Repeat password: ")
-	pass2, err := term.ReadPassword(0)
+	users, err := s.Db.GetUsers(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to read password: %v", err)
+		return fmt.Errorf("failed to register user")
 	}
 
-	if string(pass) != string(pass2) {
-		return fmt.Errorf("enter the same password")
-	}
-
-	hashed_password, err := auth.HashPassword(string(pass))
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %v", err)
+	setSuperUser := (len(users) == 0)
+	isSuperUser := sql.NullBool{
+		Valid: true,
+		Bool: setSuperUser,	
 	}
 
 	pars := database.CreateUserParams{
@@ -102,6 +90,7 @@ func handlerRegister(s *state.State, cmd Command) error {
 		UpdatedAt: time.Now(),
 		Name: name,
 		HashedPassword: hashed_password,
+		IsSuperuser: isSuperUser,
 	}
 
 	_, errTemp := s.Db.GetUser(context.Background(), name)
@@ -115,8 +104,12 @@ func handlerRegister(s *state.State, cmd Command) error {
 	}
 
 	s.Cfg.SetUser(newUser.Name, newUser.ID)
-	fmt.Printf("user %s succesfully registered", name)
-
+	if setSuperUser {
+		fmt.Printf("user %s succesfully registered and set as superuser", name)
+	} else {
+		fmt.Printf("user %s succesfully registered", name)
+	}
+	
 	return nil
 }
 
@@ -132,9 +125,18 @@ func handlerGetUsers(s *state.State, cmd Command) error {
 
 	for _, user := range users {
 		if user.Name == s.Cfg.CurrentUserName {
-			fmt.Printf("* %s (current)\n", user.Name)
+			if user.Name == s.Cfg.SuperUserName {
+				fmt.Printf("* %s (current) (superuser)\n", user.Name)
+			} else {
+				fmt.Printf("* %s (current)\n", user.Name)
+			}
+			
 		} else {
-			fmt.Printf("* %s\n", user.Name)
+			if user.Name == s.Cfg.SuperUserName {
+				fmt.Printf("* %s (superuser)\n", user.Name)
+			} else {
+				fmt.Printf("* %s\n", user.Name)
+			}
 		}
 	}
 
@@ -204,9 +206,14 @@ func handlerStopAgg(s *state.State, cmd Command) error {
 	return nil
 }
 
-func handlerResetUsers(s *state.State, cmd Command) error {
+func handlerResetUsers(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 0 {
 		return fmt.Errorf("usage: resetusers")
+	}
+
+	errSuper := auth.CheckSuperUser(s, user)
+	if errSuper != nil {
+		return errSuper
 	}
 
 	errDelete := s.Db.ResetUsers(context.Background())
@@ -219,9 +226,14 @@ func handlerResetUsers(s *state.State, cmd Command) error {
 	return nil
 }
 
-func handlerResetFeeds(s *state.State, cmd Command) error {
+func handlerResetFeeds(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 0 {
 		return fmt.Errorf("usage: resetfeeds")
+	}
+
+	errSuper := auth.CheckSuperUser(s, user)
+	if errSuper != nil {
+		return errSuper
 	}
 
 	errDelete := s.Db.ResetFeeds(context.Background())
@@ -234,9 +246,14 @@ func handlerResetFeeds(s *state.State, cmd Command) error {
 	return nil
 }
 
-func handlerReset(s *state.State, cmd Command) error {
+func handlerReset(s *state.State, cmd Command, user *database.User) error {
 	if len(cmd.Args) != 0 {
 		return fmt.Errorf("usage: reset")
+	}
+
+	errSuper := auth.CheckSuperUser(s, user)
+	if errSuper != nil {
+		return errSuper
 	}
 
 	errDeleteUsers := s.Db.ResetUsers(context.Background())
@@ -466,6 +483,80 @@ func handlerOpen(s *state.State, cmd Command) error {
 	}
 
 	fmt.Println("opening post in default browser...")
+
+	return nil
+}
+
+func handlerChangeSuperUser(s *state.State, cmd Command, user *database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: changesuper <new superuser>")
+	}
+
+	errSuper := auth.CheckSuperUser(s, user)
+	if errSuper != nil {
+		return errSuper
+	}
+
+	newSuper, err := s.Db.GetUser(context.Background(), cmd.Args[0])
+	if err != nil {
+		return fmt.Errorf("error while looking for selected user: %v", err)
+	}
+
+	err = s.Db.UpdateToSuper(context.Background(), newSuper.ID)
+	if err != nil {
+		return fmt.Errorf("failed to set user '%s' as superuser: %v", newSuper.Name, err)
+	}
+
+	user.IsSuperuser = sql.NullBool{Valid: true, Bool: false}
+
+	s.Cfg.SuperUserID = newSuper.ID
+	s.Cfg.SuperUserName = newSuper.Name
+
+	return nil
+}
+
+func handlerChangePassword(s *state.State, cmd Command, user *database.User) error {
+	if len(cmd.Args) > 1 {
+		return fmt.Errorf("usage: changepassword [superuser only] <account name>")
+	}
+
+	if s.Cfg.SuperUserID != user.ID {
+		err := auth.ChangePassword(user, s)
+		if err != nil {
+			fmt.Println(
+				`to change the password without inserting the old one
+				 or to change the password of another account you 
+				 need supeuser privileges`)
+			return err
+		}
+
+		return nil
+
+	} else {
+		var userName string
+		
+		// superuser privileges used to change another user's password
+		if len(cmd.Args) == 1 {
+			userName = cmd.Args[0]
+			u, err := s.Db.GetUser(context.Background(), userName)
+			if err != nil {
+				return fmt.Errorf("failed to retrieve user '%s': %v", userName, err)
+			}
+
+			err = auth.ChangePassword(&u, s)
+			if err != nil {
+				return err
+			}
+
+		} else { // changing superuser's password
+			err := auth.ChangePassword(user, s)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+	}
 
 	return nil
 }

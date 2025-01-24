@@ -7,19 +7,37 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+const changePassword = `-- name: ChangePassword :exec
+UPDATE users
+SET hashed_password = $2
+WHERE id = $1
+`
+
+type ChangePasswordParams struct {
+	ID             uuid.UUID
+	HashedPassword string
+}
+
+func (q *Queries) ChangePassword(ctx context.Context, arg ChangePasswordParams) error {
+	_, err := q.db.ExecContext(ctx, changePassword, arg.ID, arg.HashedPassword)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, created_at, updated_at, name, hashed_password)
+INSERT INTO users (id, created_at, updated_at, name, hashed_password, is_superuser)
 VALUES (
 	$1,
 	$2,
 	$3,
 	$4,
-	$5
+	$5,
+	$6
 )
 RETURNING id, created_at, updated_at, name, hashed_password, is_superuser
 `
@@ -30,6 +48,7 @@ type CreateUserParams struct {
 	UpdatedAt      time.Time
 	Name           string
 	HashedPassword string
+	IsSuperuser    sql.NullBool
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -39,6 +58,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.UpdatedAt,
 		arg.Name,
 		arg.HashedPassword,
+		arg.IsSuperuser,
 	)
 	var i User
 	err := row.Scan(
@@ -130,5 +150,16 @@ DELETE FROM users
 
 func (q *Queries) ResetUsers(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, resetUsers)
+	return err
+}
+
+const updateToSuper = `-- name: UpdateToSuper :exec
+UPDATE users
+SET is_superuser = TRUE
+WHERE id = $1
+`
+
+func (q *Queries) UpdateToSuper(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, updateToSuper, id)
 	return err
 }
