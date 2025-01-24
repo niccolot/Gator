@@ -78,4 +78,5 @@ func (c *Commands) Init() {
 	c.RegisterCmd("changesuper", middlewareLoggedIn(handlerChangeSuperUser))
 	c.RegisterCmd("changepassword", middlewareLoggedIn(handlerChangePassword))
 	c.RegisterCmd("bookmark", middlewareLoggedIn(handlerBookmark))
+	c.RegisterCmd("help", handlerHelp)
 }

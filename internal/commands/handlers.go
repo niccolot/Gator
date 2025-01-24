@@ -456,15 +456,15 @@ func handlerBrowse(s *state.State, cmd Command, user *database.User) error {
 
 func handlerOpen(s *state.State, cmd Command) error {
 	if len(cmd.Args) != 1 {
-		return fmt.Errorf("usage: open <post url>")
+		return fmt.Errorf("usage: open <post url> [or] <post name>")
 	}
 
-	_, err := s.Db.GetPostFromUrl(context.Background(), cmd.Args[0])
+	post, err := s.Db.GetPost(context.Background(), cmd.Args[0])
 	if err != nil {
 		return fmt.Errorf("failed to find post: %v", err)	
 	}
 
-	errOpen := exec.Command("open", cmd.Args[0]).Run()
+	errOpen := exec.Command("open", post.Url).Run()
 	if errOpen != nil {
 		return fmt.Errorf("error opening url: %v", errOpen)
 	}
@@ -568,6 +568,36 @@ func handlerBookmark(s *state.State, cmd Command, user *database.User) error {
 	_, err = s.Db.BookmarkPost(context.Background(), *pars)
 	if err != nil {
 		return fmt.Errorf("failed to bookmark post '%s': %v", cmd.Args[0], err)
+	}
+
+	return nil
+}
+
+func handlerHelp(s *state.State, cmd Command) error {
+	usages := map[string]string{
+		"login": "usage: login <username> - Logs in a user with the specified username.",
+		"register": "usage: register <username> - Registers a new user with the specified username.",
+		"users": "usage: users - Displays the list of registered users.",
+		"aggregate": "usage: aggregate <time between reqs> [optional] -log- Starts aggregating feeds and optionally logs the aggreagtion in a file",
+		"stopagg": "usage: stopagg - Stops the ongoing feed aggregation.",
+		"resetusers": "usage: resetusers - Deletes all users from the system.",
+		"resetfeeds": "usage: resetfeeds - Deletes all feeds from the system.",
+		"reset": "usage: reset - Resets the entire database.",
+		"addfeed": "usage: addfeed \"<feed name>\" \"<feed url>\" - Adds a new feed with the given name and URL.",
+		"feeds": "usage: feeds - Lists all available feeds.",
+		"follow": "usage: follow <feed url> - Follows a feed using its URL.",
+		"following": "usage: following - Shows the feeds the user is following.",
+		"unfollow": "usage: unfollow <feed url> [or] unfollow \"<feed name>\" - Unfollows a feed by URL or name.",
+		"browse": "usage: browse [optional] <limit> - Browses recent posts from followed feeds.",
+		"open": "usage: open <post url> [or] <post name> - Opens a post in the default web browser.",
+		"changesuper": "usage: changesuper <new superuser> - Changes the superuser to a new specified user.",
+		"changepassword": "usage: changepassword [superuser only] <account name> - Changes the password of an account.",
+		"bookmark": "usage: bookmark <post title> [or] <post url> - Bookmarks a post by title or URL.",
+	}
+
+	fmt.Println("Available commands:")
+	for cmd, usage := range usages {
+		fmt.Printf("%s - %s\n", cmd, usage)
 	}
 
 	return nil
